@@ -1,9 +1,11 @@
 'use client';
 
+import { useDevicePixelRatio } from '@/lib/image/useDevicePixelRatio';
 import { useChartStore } from '@/store/chartStore';
 
 export function CanvasView() {
   const image = useChartStore((s) => s.image);
+  const dpr = useDevicePixelRatio();
   if (!image) return null;
 
   return (
@@ -16,8 +18,10 @@ export function CanvasView() {
         <img
           src={image.url}
           alt="Uploaded candle screenshot"
-          width={image.width}
-          height={image.height}
+          // One source pixel = one screen pixel at any Windows scaling or browser zoom.
+          // Stretching by a fractional ratio (1.25, 1.5) makes 1 px wicks look 2 px wide.
+          width={image.width / dpr}
+          height={image.height / dpr}
           draggable={false}
           className="block max-w-none"
           style={{ imageRendering: 'pixelated' }}
