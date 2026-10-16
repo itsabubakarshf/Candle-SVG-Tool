@@ -1,14 +1,107 @@
 'use client';
 
-import { Loader2, RefreshCw } from 'lucide-react';
+import { ArrowDownUp, Loader2, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
+import { CandleGlyph } from '@/components/CandleGlyph';
+import { currentUpGroup } from '@/lib/detect/hints';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { UNCLEAN_HELP, UNCLEAN_TITLE, describeExtras } from '@/lib/detect/notice';
+import type { CandleColors } from '@/lib/detect/types';
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
 import { useUiStore } from '@/store/uiStore';
 
 const px = (n: number | null) => (n === null ? '–' : `${n.toFixed(2)} px`);
+
+function Chip({
+  colours,
+  label,
+  icon,
+  bg,
+}: {
+  colours: CandleColors | null;
+  label: string;
+  icon: React.ReactNode;
+  bg: string;
+}) {
+  return (
+    <span className="flex items-center gap-2">
+      {colours ? (
+        <CandleGlyph
+          colours={colours}
+          background={bg}
+          className="h-9 w-6 rounded-md border border-border"
+        />
+      ) : (
+        <span className="h-9 w-6 rounded-md border border-dashed border-border" aria-hidden />
+      )}
+      <span className="leading-tight">
+        <span className="flex items-center gap-1 text-sm font-medium">
+          {icon}
+          {label}
+        </span>
+        <span
+          className="block text-[11px] text-muted-foreground"
+          data-testid={`${label.toLowerCase()}-colour`}
+        >
+          {colours ? colours.body : 'none'}
+        </span>
+      </span>
+    </span>
+  );
+}
+
+function DirectionRow() {
+  const result = useChartStore((s) => s.result);
+  const candles = useChartStore((s) => s.candles);
+  const swap = useChartStore((s) => s.swapDirection);
+  const d = result?.direction;
+  if (!result || !d) return null;
+  const up = currentUpGroup(candles, d);
+  const upColours = d.groups[up]?.colours ?? null;
+  const downColours = d.groups[1 - up]?.colours ?? null;
+  const why = {
+    structure: 'worked out from how the candles line up',
+    colour: 'from the usual green and red',
+    remembered: 'from your earlier answer',
+    user: 'your choice',
+    prior: 'a guess. Please check it',
+  }[d.source];
+  const bg = result.sourceStyle.background;
+  return (
+    <section aria-label="Candle colours" className="space-y-2" data-testid="direction-row">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        Candle colours
+      </h3>
+      <div className="flex items-center justify-between gap-2">
+        <Chip
+          bg={bg}
+          colours={upColours}
+          label="Rising"
+          icon={<TrendingUp className="h-3.5 w-3.5" aria-hidden />}
+        />
+        <Chip
+          bg={bg}
+          colours={downColours}
+          label="Falling"
+          icon={<TrendingDown className="h-3.5 w-3.5" aria-hidden />}
+        />
+        <Button variant="outline" size="sm" onClick={swap} title="Swap rising and falling">
+          <ArrowDownUp className="h-3.5 w-3.5" aria-hidden />
+          Swap
+        </Button>
+      </div>
+      <p
+        className={
+          d.sure ? 'text-xs text-muted-foreground' : 'text-xs text-amber-600 dark:text-amber-400'
+        }
+        data-testid="direction-why"
+      >
+        {d.sure ? `Decided ${why}.` : `Not sure: ${why}.`}
+      </p>
+    </section>
+  );
+}
 
 export function DetectTab() {
   const image = useChartStore((s) => s.image);
@@ -109,6 +202,8 @@ export function DetectTab() {
         </div>
       </section>
 
+      <DirectionRow />
+
       <section aria-label="Options" className="space-y-3">
         <label className="flex items-center justify-between gap-3 text-sm">
           Uniform body width
@@ -116,16 +211,6 @@ export function DetectTab() {
             checked={settings.uniformBodyWidth}
             onCheckedChange={(v) => {
               setSettings({ uniformBodyWidth: v });
-              rerun();
-            }}
-          />
-        </label>
-        <label className="flex items-center justify-between gap-3 text-sm">
-          Light body = bull
-          <Switch
-            checked={settings.lightBodyIsBull}
-            onCheckedChange={(v) => {
-              setSettings({ lightBodyIsBull: v });
               rerun();
             }}
           />

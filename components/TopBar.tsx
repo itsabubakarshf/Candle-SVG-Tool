@@ -1,6 +1,7 @@
 'use client';
 
 import { Copy, Keyboard } from 'lucide-react';
+import { AccountButton } from '@/components/AccountButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { copySvg } from '@/lib/export/actions';
@@ -52,6 +53,7 @@ export function TopBar() {
             ))}
           </select>
         </label>
+        <AccountButton />
         <ThemeToggle />
         <Button
           variant="ghost"

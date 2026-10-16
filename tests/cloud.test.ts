@@ -6,6 +6,8 @@ import {
   deleteCloudPreset,
   mergeShared,
   pullPresets,
+  pullSettings,
+  pushSettings,
   pushPresets,
   setCloudClient,
   signInWithGoogle,
@@ -203,5 +205,45 @@ describe('Google sign-in', () => {
   it('reports a failed request for the sign-in address', async () => {
     setCloudClient(oauth(null, { message: 'nope' }));
     expect(await signInWithGoogle()).toMatch(/not available yet/);
+  });
+});
+
+describe('account settings', () => {
+  const settingsClient = (row: unknown, fail = false) => {
+    const saved: unknown[] = [];
+    const client = {
+      from: (table: string) => {
+        expect(table).toBe('user_settings');
+        return {
+          select: () => ({
+            eq: () => ({
+              maybeSingle: async () =>
+                fail ? { data: null, error: { message: 'x' } } : { data: row, error: null },
+            }),
+          }),
+          upsert: async (r: unknown) => {
+            saved.push(r);
+            return { error: fail ? { message: 'x' } : null };
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+    return { client, saved };
+  };
+
+  it('reads and saves what the account has told us', async () => {
+    const f = settingsClient({ data: { directionHints: [1] } });
+    setCloudClient(f.client);
+    expect(await pullSettings(me)).toEqual({ directionHints: [1] });
+    expect(await pushSettings(me, { directionHints: [2] })).toBe(true);
+    expect(f.saved[0]).toMatchObject({ user_id: me.id, data: { directionHints: [2] } });
+  });
+
+  it('is empty for a new account and null when unreachable', async () => {
+    setCloudClient(settingsClient(null).client);
+    expect(await pullSettings(me)).toEqual({});
+    setCloudClient(settingsClient(null, true).client);
+    expect(await pullSettings(me)).toBeNull();
+    expect(await pushSettings(me, {})).toBe(false);
   });
 });

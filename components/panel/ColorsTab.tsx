@@ -1,7 +1,7 @@
 'use client';
 
-import { useRef } from 'react';
-import { Copy, Download, LogIn, LogOut, Plus, Save, Trash2, Undo2, Upload } from 'lucide-react';
+import { useMemo, useRef } from 'react';
+import { Copy, Download, Plus, Save, Trash2, Undo2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { ColorField } from '@/components/ColorField';
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 import { downloadText } from '@/lib/export/download';
 import type { CandleColors } from '@/lib/detect/types';
 import { ORIGINAL_ID, ORIGINAL_NAME } from '@/lib/presets/builtins';
+import { currentSourceStyle } from '@/lib/detect/hints';
 import { useChartStore } from '@/store/chartStore';
 import { selectActivePreset, usePresetStore } from '@/store/presetStore';
 import { cn } from '@/lib/utils';
@@ -25,10 +26,6 @@ export function ColorsTab() {
   const activeId = usePresetStore((s) => s.activeId);
   const draft = usePresetStore((s) => s.draft);
   const storageOk = usePresetStore((s) => s.storageOk);
-  const cloud = usePresetStore((s) => s.cloud);
-  const account = usePresetStore((s) => s.account);
-  const setSignInOpen = usePresetStore((s) => s.setSignInOpen);
-  const signOut = usePresetStore((s) => s.signOut);
   const ensureSignedIn = usePresetStore((s) => s.ensureSignedIn);
   const edit = usePresetStore(selectActivePreset);
   const setActive = usePresetStore((s) => s.setActive);
@@ -41,7 +38,12 @@ export function ColorsTab() {
   const importJson = usePresetStore((s) => s.importJson);
   const exportJson = usePresetStore((s) => s.exportJson);
   const createFromSource = usePresetStore((s) => s.createFromSource);
-  const sourceStyle = useChartStore((s) => s.result?.sourceStyle ?? null);
+  const result = useChartStore((s) => s.result);
+  const chartCandles = useChartStore((s) => s.candles);
+  const sourceStyle = useMemo(
+    () => currentSourceStyle(result, chartCandles),
+    [result, chartCandles],
+  );
   const fileInput = useRef<HTMLInputElement>(null);
   const isOriginal = activeId === ORIGINAL_ID;
 
@@ -181,44 +183,6 @@ export function ColorsTab() {
             }}
           />
         </div>
-        {cloud !== 'off' && (
-          <div
-            className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs"
-            data-testid="account-strip"
-          >
-            {account ? (
-              <>
-                <span className="min-w-0 truncate text-muted-foreground">
-                  Signed in as{' '}
-                  <span className="text-foreground">{account.name ?? account.email}</span>
-                  {cloud === 'offline' && ' · offline'}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 px-2"
-                  onClick={() => void signOut()}
-                >
-                  <LogOut className="h-3.5 w-3.5" aria-hidden />
-                  Sign out
-                </Button>
-              </>
-            ) : (
-              <>
-                <span className="text-muted-foreground">Sign in to save your own presets.</span>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2"
-                  onClick={() => setSignInOpen(true)}
-                >
-                  <LogIn className="h-3.5 w-3.5" aria-hidden />
-                  Sign in
-                </Button>
-              </>
-            )}
-          </div>
-        )}
         {!storageOk && (
           <p role="alert" className="text-xs text-red-600 dark:text-red-400">
             Your browser blocked saving. Presets will be lost when you close the page. Use Export to

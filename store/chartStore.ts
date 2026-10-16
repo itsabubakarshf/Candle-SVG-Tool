@@ -20,6 +20,8 @@ import {
   splitCandle,
   type EdgeKey,
 } from '@/lib/edit/ops';
+import { useHintStore } from '@/store/hintStore';
+import { currentUpGroup, withUpGroup } from '@/lib/detect/hints';
 import type { LoadedImage } from '@/lib/image/loadImage';
 
 /** One undo step: the candles and the extras together. */
@@ -85,6 +87,10 @@ interface ChartState {
   dragEdge: (id: string, key: EdgeKey, value: number) => void;
 
   setEdgeValue: (id: string, key: EdgeKey, value: number | null) => void;
+  /** Swaps which colour means rising and which falling, for the whole chart. One undo step. */
+  swapDirection: () => void;
+  /** Which colour group is rising, as the person says. Remembered for next time. */
+  chooseRising: (group: 0 | 1) => void;
   setTypeOfSelected: (type: Candle['type']) => void;
   flipSelected: () => void;
   deleteSelected: () => void;
@@ -196,7 +202,7 @@ export const useChartStore = create<ChartState>((set, get) => {
       try {
         // JPEG and WebP can be lossy: tell detection so it does not trust 1 px line colours.
         const lossySource = image.file.type !== 'image/png';
-        const result = await detectInWorker(image.file, { ...settings, lossySource });
+        let result = await detectInWorker(image.file, { ...settings, lossySource });
         if (token !== detectToken || get().image !== image) return; // a newer run took over
         if (result.candles.length === 0) {
           set({
@@ -207,6 +213,9 @@ export const useChartStore = create<ChartState>((set, get) => {
           });
           return;
         }
+        // A colour pair the person has already answered for is never asked about again.
+        const recalled = useHintStore.getState().recall(result.direction);
+        if (recalled !== null) result = withUpGroup(result, recalled, 'remembered');
         if (opts?.undoable) commitAll({ candles: result.candles, extras: result.extras });
         else set({ candles: result.candles, extras: result.extras, past: [], future: [] });
         set({
@@ -298,6 +307,37 @@ export const useChartStore = create<ChartState>((set, get) => {
         get().candles.map((c) => (c.id === id ? setEdge(c, key, value) : c)),
         `edge:${id}:${key}`,
       ),
+    swapDirection: () => {
+      const { result, candles } = get();
+      if (!result?.direction || candles.length === 0) return;
+      const flipped = candles.map(
+        (c) => ({ ...c, type: c.type === 'bull' ? 'bear' : 'bull' }) as Candle,
+      );
+      commit(flipped);
+      const up = currentUpGroup(flipped, result.direction);
+      set({
+        result: {
+          ...result,
+          direction: { ...result.direction, upGroup: up, source: 'user', sure: true },
+        },
+      });
+      useHintStore.getState().remember(result.direction, up);
+    },
+
+    chooseRising: (group) => {
+      const { result, candles } = get();
+      if (!result?.direction) return;
+      if (currentUpGroup(candles, result.direction) !== group) {
+        get().swapDirection();
+        return;
+      }
+      // the guess was right: just stop asking
+      set({
+        result: { ...result, direction: { ...result.direction, source: 'user', sure: true } },
+      });
+      useHintStore.getState().remember(result.direction, group);
+    },
+
     setTypeOfSelected: (type) => {
       if (get().selectedIds.length === 0) return;
       commit(mapSelected((c) => setType(c, type)));

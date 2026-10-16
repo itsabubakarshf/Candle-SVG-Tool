@@ -190,6 +190,45 @@ export async function deleteCloudPreset(id: string, account: Account): Promise<b
   }
 }
 
+/** The signed-in account's own settings (what it has told us about its charts). */
+export async function pullSettings(account: Account): Promise<Record<string, unknown> | null> {
+  const c = getClient();
+  if (!c) return null;
+  try {
+    const { data, error } = await c
+      .from('user_settings')
+      .select('data')
+      .eq('user_id', account.id)
+      .maybeSingle();
+    if (error) return null;
+    const d = (data as { data?: unknown } | null)?.data;
+    return typeof d === 'object' && d !== null && !Array.isArray(d)
+      ? (d as Record<string, unknown>)
+      : {};
+  } catch {
+    return null;
+  }
+}
+
+export async function pushSettings(
+  account: Account,
+  data: Record<string, unknown>,
+): Promise<boolean> {
+  const c = getClient();
+  if (!c) return false;
+  try {
+    const { error } = await c
+      .from('user_settings')
+      .upsert(
+        { user_id: account.id, data, updated_at: new Date().toISOString() },
+        { onConflict: 'user_id' },
+      );
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 const PENDING_KEY = 'candlesvg:pendingPreset';
 
 /**

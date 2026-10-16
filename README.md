@@ -25,6 +25,13 @@ If the screenshot has anything besides candles (a line, a box, price numbers, a 
 shows one notice: "This chart is not clean". It looks at where things are, never at colours, so
 candles in any colour are fine. The check stays silent when unsure.
 
+Rising and falling candles are told apart from how the candles line up (each candle opens where
+the one before it closed), then from the usual green and red. Any colours work: blue and orange,
+white and red, red up and green down. When the chart gives no clear answer, Crisper asks once
+("Which colour is a rising candle?") with a tap, and remembers the answer for those colours
+(in the browser, and in the account when signed in). The Detect tab always shows the choice with a
+Swap button.
+
 In Figma a normal resize keeps wicks and borders thin. The Scale tool (K) scales strokes too.
 
 ## Saved presets online

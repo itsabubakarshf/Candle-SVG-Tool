@@ -110,9 +110,10 @@ test.describe('saving presets needs an account', () => {
   test('a signed-out visitor who tries to save is asked to sign in', async ({ page }) => {
     const fake = await fakeDatabase(page);
     await openColors(page);
-    await expect(page.getByTestId('account-strip').filter({ visible: true })).toContainText(
-      'Sign in to save',
-    );
+    // the sign-in button sits in the top bar, next to the theme switch
+    await expect(
+      page.getByRole('banner').getByRole('button', { name: 'Sign in', exact: true }),
+    ).toBeVisible();
     await page
       .getByRole('region', { name: 'Presets' })
       .getByRole('button', { name: 'New', exact: true })
@@ -135,10 +136,7 @@ test.describe('saving presets needs an account', () => {
   test('Google sign-in is offered and sends the visitor to Google', async ({ page }) => {
     await fakeDatabase(page);
     await openColors(page);
-    await page
-      .getByRole('button', { name: 'Sign in', exact: true })
-      .filter({ visible: true })
-      .click();
+    await page.getByRole('banner').getByRole('button', { name: 'Sign in', exact: true }).click();
     const nav = page.waitForRequest((r) => r.url().includes('/auth/v1/authorize'));
     await page.getByRole('button', { name: 'Continue with Google' }).click();
     expect((await nav).url()).toContain('provider=google');
@@ -149,10 +147,7 @@ test.describe('saving presets needs an account', () => {
   }) => {
     await fakeDatabase(page, { google: false });
     await openColors(page);
-    await page
-      .getByRole('button', { name: 'Sign in', exact: true })
-      .filter({ visible: true })
-      .click();
+    await page.getByRole('banner').getByRole('button', { name: 'Sign in', exact: true }).click();
     await page.getByRole('button', { name: 'Continue with Google' }).click();
     const dialog = page.getByRole('dialog');
     await expect(dialog.getByRole('alert')).toContainText('Google sign-in is not available yet');
@@ -164,9 +159,12 @@ test.describe('saving presets needs an account', () => {
     const fake = await fakeDatabase(page);
     await signedIn(page, 'Mo');
     await openColors(page);
-    await expect(page.getByTestId('account-strip').filter({ visible: true })).toContainText(
-      'Signed in as Mo',
-    );
+    await expect(
+      page.getByRole('banner').getByRole('button', { name: 'Sign in', exact: true }),
+    ).toHaveCount(0);
+    await page.getByRole('button', { name: 'Account: Mo' }).click();
+    await expect(page.getByRole('menuitem', { name: 'Sign out' })).toBeVisible();
+    await page.keyboard.press('Escape');
     await page
       .getByRole('region', { name: 'Presets' })
       .getByRole('button', { name: 'New', exact: true })

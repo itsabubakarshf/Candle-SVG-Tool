@@ -3,6 +3,7 @@ import type { SourceStyle } from '@/lib/detect/types';
 import { LIGHT_PRESET, ORIGINAL_ID } from '@/lib/presets/builtins';
 import { originalPreset } from '@/lib/presets/original';
 import type { Preset } from '@/lib/presets/types';
+import { currentSourceStyle } from '@/lib/detect/hints';
 import { useChartStore } from './chartStore';
 import { usePresetStore } from './presetStore';
 
@@ -25,7 +26,9 @@ export function useResolvedPreset(): Preset {
   const presets = usePresetStore((s) => s.presets);
   const activeId = usePresetStore((s) => s.activeId);
   const draft = usePresetStore((s) => s.draft);
-  const source = useChartStore((s) => s.result?.sourceStyle ?? null);
+  const result = useChartStore((s) => s.result);
+  const candles = useChartStore((s) => s.candles);
+  const source = useMemo(() => currentSourceStyle(result, candles), [result, candles]);
   return useMemo(
     () => resolvePreset({ presets, activeId, draft }, source),
     [presets, activeId, draft, source],
@@ -34,8 +37,6 @@ export function useResolvedPreset(): Preset {
 
 /** For code outside React (export actions). */
 export function getResolvedPreset(): Preset {
-  return resolvePreset(
-    usePresetStore.getState(),
-    useChartStore.getState().result?.sourceStyle ?? null,
-  );
+  const { result, candles } = useChartStore.getState();
+  return resolvePreset(usePresetStore.getState(), currentSourceStyle(result, candles));
 }

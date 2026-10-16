@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { CanvasView } from '@/components/CanvasView';
+import { DirectionPrompt } from '@/components/DirectionPrompt';
 import { ShortcutsDialog } from '@/components/ShortcutsDialog';
 import { SignInDialog } from '@/components/SignInDialog';
 import { TopBar } from '@/components/TopBar';
@@ -14,6 +15,7 @@ import { useReadLabels } from '@/lib/ocr/useReadLabels';
 import { useShortcuts } from '@/lib/shortcuts/useShortcuts';
 import { UNCLEAN_HELP, UNCLEAN_TITLE, describeExtras } from '@/lib/detect/notice';
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
+import { useHintStore } from '@/store/hintStore';
 import { usePresetStore } from '@/store/presetStore';
 import { useThemeStore } from '@/store/themeStore';
 
@@ -30,6 +32,12 @@ export function App() {
   // Saved presets are read on the client only, so the server render matches the first paint.
   useEffect(() => hydrate(), [hydrate]);
   useEffect(() => hydrateTheme(), [hydrateTheme]);
+  // What the person has said about their charts' colours, kept in the account when signed in.
+  const accountId = usePresetStore((s) => s.account?.id ?? null);
+  useEffect(() => useHintStore.getState().hydrate(), []);
+  useEffect(() => {
+    void useHintStore.getState().setAccount(usePresetStore.getState().account);
+  }, [accountId]);
 
   // Tell the user what detection found (or why it found nothing).
   const announced = useRef<string>('');
@@ -66,8 +74,11 @@ export function App() {
     <div className="flex min-h-screen flex-col lg:h-screen">
       <TopBar />
       <div className="flex min-h-0 flex-1 flex-col lg:flex-row">
-        <main className="min-h-[24rem] min-w-0 flex-1 p-4 lg:min-h-0">
-          {image ? <CanvasView /> : <UploadZone onFile={(f) => void ingest(f)} />}
+        <main className="flex min-h-[24rem] min-w-0 flex-1 flex-col p-4 lg:min-h-0">
+          {image && <DirectionPrompt />}
+          <div className="min-h-0 flex-1">
+            {image ? <CanvasView /> : <UploadZone onFile={(f) => void ingest(f)} />}
+          </div>
         </main>
         <SidePanel />
       </div>
