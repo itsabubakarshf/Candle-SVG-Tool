@@ -1,0 +1,135 @@
+import { describe, expect, it } from 'vitest';
+import { ABBI_DARK, ABBI_LIGHT, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
+import {
+  ACTIVE_KEY,
+  PRESETS_KEY,
+  exportPresetsJson,
+  loadActiveId,
+  loadUserPresets,
+  parseImportedPresets,
+  parsePreset,
+  saveActiveId,
+  saveUserPresets,
+  type KeyValueStorage,
+} from '@/lib/presets/storage';
+import type { Preset } from '@/lib/presets/types';
+
+function fakeStorage(
+  initial: Record<string, string> = {},
+): KeyValueStorage & { data: Record<string, string> } {
+  const data = { ...initial };
+  return {
+    data,
+    getItem: (k) => data[k] ?? null,
+    setItem: (k, v) => {
+      data[k] = v;
+    },
+  };
+}
+
+const broken: KeyValueStorage = {
+  getItem: () => {
+    throw new Error('blocked');
+  },
+  setItem: () => {
+    throw new Error('blocked');
+  },
+};
+
+const custom: Preset = {
+  ...ABBI_LIGHT,
+  id: 'preset-1',
+  name: 'Mine',
+  builtIn: false,
+  bull: { body: '#112233', border: '#445566', wick: '#778899' },
+  borderWidth: 2,
+  background: '#101010',
+};
+
+describe('built-in presets', () => {
+  it('ship "Abbi Light" with the default values from the spec, and a dark mirror', () => {
+    expect(ABBI_LIGHT.name).toBe('Abbi Light');
+    expect(ABBI_LIGHT.bull).toEqual({ body: '#FFFFFF', border: '#2B2F36', wick: '#2B2F36' });
+    expect(ABBI_LIGHT.bear).toEqual({ body: '#2B2F36', border: '#2B2F36', wick: '#2B2F36' });
+    expect(ABBI_LIGHT.borderWidth).toBe(1);
+    expect(ABBI_LIGHT.wickWidth).toBe(1);
+    expect(ABBI_LIGHT.background).toBeNull();
+    expect(ABBI_DARK.name).toBe('Abbi Dark');
+    expect(BUILT_IN_PRESETS.every((p) => p.builtIn)).toBe(true);
+  });
+});
+
+describe('persistence (FR-13)', () => {
+  it('saves and loads user presets and the active id', () => {
+    const s = fakeStorage();
+    expect(saveUserPresets([ABBI_LIGHT, custom], s)).toBe(true);
+    expect(loadUserPresets(s)).toEqual([custom]); // built-ins are never stored
+    expect(saveActiveId('preset-1', s)).toBe(true);
+    expect(loadActiveId(s)).toBe('preset-1');
+    expect(Object.keys(s.data).sort()).toEqual([ACTIVE_KEY, PRESETS_KEY].sort());
+  });
+
+  it('stores a schema version so later versions can migrate', () => {
+    const s = fakeStorage();
+    saveUserPresets([custom], s);
+    const stored = JSON.parse(s.data[PRESETS_KEY] as string);
+    expect(stored.schemaVersion).toBe(1);
+    expect(stored.presets[0].schemaVersion).toBe(1);
+  });
+
+  it('falls back to nothing (so the built-ins load) when storage is empty, corrupt or blocked', () => {
+    expect(loadUserPresets(fakeStorage())).toEqual([]);
+    expect(loadUserPresets(fakeStorage({ [PRESETS_KEY]: '{not json' }))).toEqual([]);
+    expect(loadUserPresets(fakeStorage({ [PRESETS_KEY]: '{"presets":"nope"}' }))).toEqual([]);
+    expect(loadUserPresets(broken)).toEqual([]);
+    expect(loadUserPresets(null)).toEqual([]);
+    expect(loadActiveId(broken)).toBeNull();
+    expect(saveUserPresets([custom], broken)).toBe(false);
+    expect(saveActiveId('x', broken)).toBe(false);
+    expect(saveUserPresets([custom], null)).toBe(false);
+  });
+
+  it('drops invalid entries and keeps the good ones', () => {
+    const s = fakeStorage({
+      [PRESETS_KEY]: JSON.stringify({ presets: [custom, { name: 'bad', bull: {} }, 42] }),
+    });
+    expect(loadUserPresets(s)).toEqual([custom]);
+  });
+});
+
+describe('parsePreset', () => {
+  it('normalises colours and clamps widths', () => {
+    const p = parsePreset({
+      ...custom,
+      bull: { body: '#abc', border: 'def', wick: '#123456' },
+      borderWidth: 500,
+      wickWidth: -3,
+    });
+    expect(p?.bull.body).toBe('#AABBCC');
+    expect(p?.bull.border).toBe('#DDEEFF');
+    expect(p?.borderWidth).toBe(20);
+    expect(p?.wickWidth).toBe(0.1);
+  });
+  it('never trusts builtIn from a file, and rejects unknown future versions', () => {
+    expect(parsePreset({ ...custom, builtIn: true })?.builtIn).toBe(false);
+    expect(parsePreset({ ...custom, schemaVersion: 99 })).toBeNull();
+    expect(parsePreset({ ...custom, name: '   ' })).toBeNull();
+    expect(parsePreset(null)).toBeNull();
+  });
+});
+
+describe('backup file (FR-14)', () => {
+  it('round-trips through export and import', () => {
+    const text = exportPresetsJson([ABBI_LIGHT, custom]);
+    const parsed = parseImportedPresets(text);
+    expect(parsed?.presets).toEqual([custom]);
+    expect(parsed?.skipped).toBe(0);
+  });
+  it('reports skipped entries and rejects non-preset files', () => {
+    const parsed = parseImportedPresets(JSON.stringify({ presets: [custom, { nope: true }] }));
+    expect(parsed?.presets.length).toBe(1);
+    expect(parsed?.skipped).toBe(1);
+    expect(parseImportedPresets('garbage')).toBeNull();
+    expect(parseImportedPresets('{"a":1}')).toBeNull();
+  });
+});
