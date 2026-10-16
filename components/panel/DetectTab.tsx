@@ -1,5 +1,6 @@
 'use client';
 
+import { toast } from 'sonner';
 import { ArrowDownUp, Loader2, RefreshCw, TrendingDown, TrendingUp } from 'lucide-react';
 import { CandleGlyph } from '@/components/CandleGlyph';
 import { currentUpGroup } from '@/lib/detect/hints';
@@ -8,6 +9,8 @@ import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
 import { UNCLEAN_HELP, UNCLEAN_TITLE, describeExtras } from '@/lib/detect/notice';
 import type { CandleColors } from '@/lib/detect/types';
+import { ORIGINAL_ID } from '@/lib/presets/builtins';
+import { usePresetStore } from '@/store/presetStore';
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
 import { useUiStore } from '@/store/uiStore';
 
@@ -54,7 +57,9 @@ function Chip({
 function DirectionRow() {
   const result = useChartStore((s) => s.result);
   const candles = useChartStore((s) => s.candles);
-  const swap = useChartStore((s) => s.swapDirection);
+  const swapDirection = useChartStore((s) => s.swapDirection);
+  const activeId = usePresetStore((s) => s.activeId);
+  const original = activeId === ORIGINAL_ID;
   const d = result?.direction;
   if (!result || !d) return null;
   const up = currentUpGroup(candles, d);
@@ -68,10 +73,24 @@ function DirectionRow() {
     prior: 'a guess. Please check it',
   }[d.source];
   const bg = result.sourceStyle.background;
+  const swap = () => {
+    // After the swap, "up" is the other colour.
+    const now = d.groups[1 - up]?.colours?.body;
+    swapDirection();
+    toast.success(now ? `Rising is now ${now}.` : 'Swapped.', {
+      description: original
+        ? 'Original colors keep each candle’s own colour, so the picture stays the same. Pick a preset like Abbi or Mo to see the swap.'
+        : undefined,
+    });
+  };
   return (
-    <section aria-label="Candle colours" className="space-y-2" data-testid="direction-row">
+    <section
+      aria-label="Colours in your screenshot"
+      className="space-y-2"
+      data-testid="direction-row"
+    >
       <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-        Candle colours
+        Colours in your screenshot
       </h3>
       <div className="flex items-center justify-between gap-2">
         <Chip
@@ -99,6 +118,12 @@ function DirectionRow() {
       >
         {d.sure ? `Decided ${why}.` : `Not sure: ${why}.`}
       </p>
+      {original && (
+        <p className="text-xs text-muted-foreground" data-testid="direction-original-note">
+          Original colors keep every candle&apos;s own colour. Swap changes which candles a preset
+          like Abbi or Mo paints as rising.
+        </p>
+      )}
     </section>
   );
 }

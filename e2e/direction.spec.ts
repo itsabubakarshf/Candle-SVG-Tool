@@ -93,4 +93,48 @@ test.describe('which colour is rising', () => {
     await page.keyboard.press('Control+z');
     await expect(rising).toHaveText(before);
   });
+
+  test('Swap says what it did, and why Original colors look unchanged', async ({ page }) => {
+    await loadBuffer(page, pngBuffer(randomChart(10, 3, BLUE_ORANGE)));
+    await expect(page.getByTestId('candle-count')).toHaveText('10 candles');
+    const note = page.getByTestId('direction-original-note');
+    await expect(note).toContainText('Original colors keep every candle');
+    await page.getByTestId('direction-row').getByRole('button', { name: 'Swap' }).click();
+    await expect(page.getByText(/Rising is now #/)).toBeVisible();
+    await expect(page.getByText(/Pick a preset like Abbi or Mo/)).toBeVisible();
+
+    // with a preset the note is gone, and Swap really repaints
+    await page.getByLabel('Active preset').selectOption({ label: 'Abbi' });
+    await expect(note).toHaveCount(0);
+  });
+});
+
+test.describe('the SVG over the screenshot', () => {
+  test('is fully opaque by default, so a preset shows its own colours', async ({ page }) => {
+    await loadBuffer(page, pngBuffer(randomChart(10, 3, BLUE_ORANGE)));
+    await expect(page.getByTestId('candle-count')).toHaveText('10 candles');
+    await expect(page.getByTestId('overlay-shapes')).toHaveAttribute('opacity', '1');
+    await expect(page.getByRole('slider', { name: 'SVG opacity' })).toHaveAttribute(
+      'aria-valuenow',
+      '100',
+    );
+  });
+
+  test('remembers the opacity you choose', async ({ page }) => {
+    const png = pngBuffer(randomChart(10, 3, BLUE_ORANGE));
+    await loadBuffer(page, png);
+    const slider = page.getByRole('slider', { name: 'SVG opacity' });
+    await slider.focus();
+    await page.keyboard.press('Home'); // 0
+    await page.keyboard.press('ArrowRight'); // 5
+    await expect(page.getByTestId('overlay-shapes')).toHaveAttribute('opacity', '0.05');
+    await page.reload();
+    await page.setInputFiles('input[type=file]', {
+      name: 'again.png',
+      mimeType: 'image/png',
+      buffer: png,
+    });
+    await expect(page.getByTestId('candle-count')).toHaveText('10 candles');
+    await expect(page.getByTestId('overlay-shapes')).toHaveAttribute('opacity', '0.05');
+  });
 });

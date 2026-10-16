@@ -17,6 +17,7 @@ import { UNCLEAN_HELP, UNCLEAN_TITLE, describeExtras } from '@/lib/detect/notice
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
 import { useHintStore } from '@/store/hintStore';
 import { usePresetStore } from '@/store/presetStore';
+import { useUiStore } from '@/store/uiStore';
 import { useThemeStore } from '@/store/themeStore';
 
 export function App() {
@@ -32,6 +33,7 @@ export function App() {
   // Saved presets are read on the client only, so the server render matches the first paint.
   useEffect(() => hydrate(), [hydrate]);
   useEffect(() => hydrateTheme(), [hydrateTheme]);
+  useEffect(() => useUiStore.getState().hydrate(), []);
   // What the person has said about their charts' colours, kept in the account when signed in.
   const accountId = usePresetStore((s) => s.account?.id ?? null);
   useEffect(() => useHintStore.getState().hydrate(), []);
