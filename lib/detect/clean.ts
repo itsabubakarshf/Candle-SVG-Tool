@@ -29,6 +29,8 @@ export interface CandleExtent {
   bodyBottom: number;
   wickTop: number | null;
   wickBottom: number | null;
+  /** What the body is filled with, when known. */
+  fill?: [number, number, number];
 }
 
 export interface CleanOptions {
@@ -364,6 +366,7 @@ export function stripLongLines(
   const outDe = new Float32Array(de);
   const outDl = new Float32Array(dl);
   const stripped = new Uint8Array(width);
+  const confirmed = new Set<(typeof lines)[number]>();
   for (let a = 0; a < width; a++) {
     if (!gap[a]) continue;
     let b = a;
@@ -387,6 +390,7 @@ export function stripLongLines(
     }
     for (const g of lines) {
       if (hollow.has(g) || g.a > b || g.b < a) continue;
+      confirmed.add(g);
       for (let x = Math.max(a, g.a); x <= Math.min(b, g.b); x++) {
         for (let y = Math.max(0, g.top - 1); y <= Math.min(height - 1, g.bottom + 1); y++) {
           outDe[y * width + x] = 0;
@@ -396,6 +400,29 @@ export function stripLongLines(
       }
     }
     a = b;
+  }
+  // Where such a line passes a candle's column without touching the candle (it runs above or
+  // below it), the line is removed there too, or it would stretch the candle up to the line.
+  const faint = 8;
+  for (const g of confirmed) {
+    const y0 = Math.max(0, g.top - 1);
+    const y1 = Math.min(height - 1, g.bottom + 1);
+    for (let x = g.a; x <= g.b; x++) {
+      if (stripped[x]) continue;
+      let touching = false;
+      for (let dx = -1; dx <= 1 && !touching; dx++) {
+        const cx = x + dx;
+        if (cx < 0 || cx >= width) continue;
+        for (const y of [y0 - 2, y0 - 1, y1 + 1, y1 + 2]) {
+          if (y >= 0 && y < height && (de[y * width + cx] as number) >= faint) touching = true;
+        }
+      }
+      if (touching) continue;
+      for (let y = y0; y <= y1; y++) {
+        outDe[y * width + x] = 0;
+        outDl[y * width + x] = 0;
+      }
+    }
   }
   // Only a line that crosses the gaps between candles counts (and needs removing).
   let columns = 0;

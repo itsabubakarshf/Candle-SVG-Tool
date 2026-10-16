@@ -4,6 +4,7 @@ import { median, measureCluster, type Measured } from './measure';
 import { findBackground } from './background';
 import { classifyCandles, sampleInterior } from './classify';
 import { checkClean, stripLongLines } from './clean';
+import { findExtras, withoutFootprint, withoutFootprintDe } from './extras';
 import { confidenceScore } from './confidence';
 import { colourMaps } from './coverage';
 import { segmentColumns } from './segment';
@@ -50,8 +51,100 @@ export function detect(
   };
   // A strong line across the chart joins all the candles into one: take it out first.
   const stripped = stripLongLines(raw.de, raw.dl, width, height);
-  const { de, dl } = stripped;
-  const measured = read(de, dl);
+  let { de, dl } = stripped;
+
+  // Dotted and dashed lines would each be read as a candle: take them out before anything else.
+  const lossy = settings.lossySource ?? false;
+  const pre = findExtras(image, background, raw.de, [], { lossy, patternedOnly: true });
+  const base =
+    pre.extras.length > 0
+      ? withoutFootprint(stripped.de, stripped.dl, pre.footprint, width, height)
+      : stripped;
+  let measured = read(base.de, base.dl);
+  de = base.de;
+  dl = base.dl;
+
+  // Lines, boxes and labels next to the candles. They can hide or break candles, so once found
+  // they are taken out of the picture and the candles are read again.
+  const extent = (list: Measured[]) => {
+    const widths = list.map((m) => m.bodyRight - m.bodyLeft);
+    const heights = list.map((m) => (m.wickBottom ?? m.bodyBottom) - (m.wickTop ?? m.bodyTop));
+    const typicalW = median(widths);
+    const typicalH = median(heights);
+    return list
+      .filter((m, i) => {
+        // a digit read as a candle: much narrower and much shorter than the real ones
+        const tiny =
+          (widths[i] as number) < 0.4 * typicalW && (heights[i] as number) < 0.5 * typicalH;
+        if (tiny) return false;
+        // several labels stacked in one column also look like one narrow candle: a real one is
+        // unbroken from its top to its bottom
+        if ((widths[i] as number) < 0.5 * typicalW) {
+          const top = Math.floor(m.wickTop ?? m.bodyTop);
+          const bottom = Math.ceil(m.wickBottom ?? m.bodyBottom);
+          let inked = 0;
+          for (let y = top; y < bottom; y++) {
+            for (let dx = -1; dx <= 1; dx++) {
+              const x = Math.floor(m.centerX) + dx;
+              if (x >= 0 && x < width && (raw.de[y * width + x] as number) >= 4) {
+                inked++;
+                break;
+              }
+            }
+          }
+          if (inked < 0.85 * Math.max(1, bottom - top)) return false;
+        }
+        // a row of letters also looks like a flat bar: a real bar is inked from end to end
+        if (m.bodyBottom - m.bodyTop <= 6) {
+          const left = Math.ceil(m.bodyLeft) + 1;
+          const right = Math.floor(m.bodyRight) - 1;
+          let inked = 0;
+          for (let x = left; x <= right; x++) {
+            for (let y = Math.floor(m.bodyTop); y <= Math.ceil(m.bodyBottom); y++) {
+              if (
+                x >= 0 &&
+                x < width &&
+                y >= 0 &&
+                y < height &&
+                (raw.de[y * width + x] as number) >= 4
+              ) {
+                inked++;
+                break;
+              }
+            }
+          }
+          if (right >= left && inked < 0.85 * (right - left + 1)) return false;
+        }
+        return true;
+      })
+      .map((m) => ({
+        fill: sampleInterior(image, m, background).rgb,
+        centerX: m.centerX,
+        bodyLeft: m.bodyLeft,
+        bodyRight: m.bodyRight,
+        bodyTop: m.bodyTop,
+        bodyBottom: m.bodyBottom,
+        wickTop: m.wickTop,
+        wickBottom: m.wickBottom,
+      }));
+  };
+  let found = findExtras(image, background, raw.de, extent(measured), { lossy });
+  // Reading the candles again changes what counts as "not a candle": go round until it settles.
+  for (let round = 0; round < 3 && found.extras.length > 0; round++) {
+    const cleaned = withoutFootprint(stripped.de, stripped.dl, found.footprint, width, height);
+    const again = read(cleaned.de, cleaned.dl);
+    if (again.length === 0) break;
+    measured = again;
+    const next = findExtras(image, background, raw.de, extent(measured), { lossy });
+    const same = next.extras.length === found.extras.length && sameFootprint(next, found);
+    found = next;
+    de = cleaned.de;
+    dl = cleaned.dl;
+    if (same) break;
+  }
+  if (found.extras.length > 0) {
+    ({ de, dl } = withoutFootprint(stripped.de, stripped.dl, found.footprint, width, height));
+  }
 
   if (measured.length === 0) {
     return {
@@ -60,6 +153,7 @@ export function detect(
       medianBodyWidth: null,
       sourceBorderWidth: null,
       sourceWickWidth: null,
+      extras: [],
       cleanliness: { clean: true, issues: [] },
       sourceStyle: {
         bull: null,
@@ -156,15 +250,23 @@ export function detect(
     sourceWickWidth,
     sourceStyle,
     // Judged from where the candles are, never from their colours.
-    cleanliness: checkClean(raw.de, width, height, measured, {
+    extras: found.extras,
+    cleanliness: checkClean(withoutFootprintDe(raw.de, found.footprint), width, height, measured, {
       lossy: settings.lossySource,
-      knownLines: stripped.found,
+      // a long line that was found and turned into a line shape is not an extra left over
+      knownLines: stripped.found && !found.extras.some((e) => e.kind === 'line'),
       // Before warning, look again with a more sensitive eye: marks that turn out to be faint
       // candles are not extras. Only candle-sized finds count.
       moreCandles: () =>
         faintCandles(de, dl, width, height, settings, image, background, medianWidth),
     }),
   };
+}
+
+function sameFootprint(a: { footprint: Uint8Array }, b: { footprint: Uint8Array }): boolean {
+  if (a.footprint.length !== b.footprint.length) return false;
+  for (let i = 0; i < a.footprint.length; i++) if (a.footprint[i] !== b.footprint[i]) return false;
+  return true;
 }
 
 interface Rgb3 {

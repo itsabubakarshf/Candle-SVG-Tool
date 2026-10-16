@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
-import type { CleanIssue } from '@/lib/detect/clean';
+import { checkClean } from '@/lib/detect/clean';
 import { detect } from '@/lib/detect';
 import { DEFAULT_SETTINGS, type PixelImage } from '@/lib/detect/types';
 import {
@@ -18,7 +18,6 @@ import {
   randomChart,
   renderChart,
   resizeBilinear,
-  type Rgb,
   type SynthCandle,
   type SynthChart,
   type SynthStyle,
@@ -160,9 +159,11 @@ describe('a clean chart is never flagged (whatever its colours or quality)', () 
     for (const v of VARIANTS) {
       it(`${name} | ${v.name}`, () => {
         const { image, lossy } = v.make(chart);
-        const r = report(image, lossy);
-        expect(r.issues, `${name} | ${v.name}`).toEqual([]);
-        expect(r.clean).toBe(true);
+        const r = detect(image, { ...DEFAULT_SETTINGS, lossySource: lossy });
+        expect(r.cleanliness.issues, `${name} | ${v.name}`).toEqual([]);
+        expect(r.cleanliness.clean).toBe(true);
+        // and nothing is invented: a chart of only candles has no lines, boxes or labels
+        expect(r.extras, `${name} | ${v.name}`).toEqual([]);
       });
     }
   }
@@ -178,9 +179,13 @@ describe('a clean chart is never flagged (whatever its colours or quality)', () 
       const chart = randomChart(10 + (seed % 30), seed, style, bodyWidth, pitch);
       for (const v of VARIANTS) {
         const { image, lossy } = v.make(chart);
-        const r = report(image, lossy);
+        const r = detect(image, { ...DEFAULT_SETTINGS, lossySource: lossy });
         n++;
-        if (!r.clean) flagged.push(`seed ${seed} w${bodyWidth} p${pitch} ${v.name}: ${r.issues}`);
+        if (!r.cleanliness.clean || r.extras.length > 0) {
+          flagged.push(
+            `seed ${seed} w${bodyWidth} p${pitch} ${v.name}: ${r.cleanliness.issues} ${r.extras.map((e) => e.kind)}`,
+          );
+        }
       }
     }
     expect(flagged, `${flagged.length} of ${n} flagged`).toEqual([]);
@@ -229,182 +234,37 @@ describe('a clean chart is never flagged (whatever its colours or quality)', () 
   });
 });
 
-// ------------------------------------------------------------------ real extras are found
-describe('a chart with extras is flagged, with the right reason', () => {
-  const GRAY: Rgb = [120, 128, 140];
-
-  const bases: Array<[string, SynthChart, Rgb, Rgb]> = [
-    // name, chart, ink colour for solid marks, faint-grid colour
-    [
-      'TradingView colours',
-      layout(mixed(6), { style: TV_DEFAULT, pitch: 40, height: 300 }),
-      [41, 98, 255],
-      [0, 0, 0],
-    ],
-    [
-      'hollow bull + dark bear',
-      layout(mixed(6), { style: HOLLOW_STYLE, pitch: 40, height: 300 }),
-      [220, 30, 30],
-      [0, 0, 0],
-    ],
-    [
-      'dark theme',
-      layout(mixed(6), { style: DARK_STYLE, pitch: 40, height: 300 }),
-      [255, 255, 255],
-      [160, 168, 190],
-    ],
-  ];
-
-  const wide = (c: SynthChart): SynthChart => ({ ...c, width: c.width + 50 }); // room for a price scale
-
-  for (const [name, base, ink, gridColor] of bases) {
-    describe(name, () => {
-      const make = () => copyImage(renderChart(wide(base)).image);
-      const alphaFaint = name === 'dark theme' ? 0.18 : 0.06;
-
-      it('a level line across the whole chart', () => {
-        const img = make();
-        overlayLine(img, { x0: 0, y0: 80, x1: img.width, y1: 80, color: ink });
-        expect(report(img, false).issues).toContain('lines');
-      });
-
-      it('a level line from a candle to the right edge only', () => {
-        const img = make();
-        overlayLine(img, {
-          x0: img.width * 0.5,
-          y0: 90,
-          x1: img.width,
-          y1: 90,
-          color: ink,
-          width: 2,
-        });
-        expect(report(img, false).issues).toContain('lines');
-      });
-
-      it('a faint dotted grid (horizontal)', () => {
-        const img = make();
-        for (const y of [40, 100, 160, 220, 270]) {
-          overlayLine(img, {
-            x0: 0,
-            y0: y,
-            x1: img.width,
-            y1: y,
-            color: gridColor,
-            alpha: alphaFaint,
-            dash: [1, 3],
-          });
-        }
-        expect(report(img, false).issues).toContain('lines');
-      });
-
-      it('a faint grid (vertical)', () => {
-        const img = make();
-        for (const x of [30, 90, 150, 210]) {
-          overlayLine(img, {
-            x0: x,
-            y0: 0,
-            x1: x,
-            y1: img.height,
-            color: gridColor,
-            alpha: alphaFaint,
-          });
-        }
-        expect(report(img, false).issues).toContain('lines');
-      });
-
-      it('a vertical line (session or time marker)', () => {
-        const img = make();
-        overlayLine(img, { x0: 150, y0: 0, x1: 150, y1: img.height, color: ink, dash: [6, 4] });
-        expect(report(img, false).issues).toContain('lines');
-      });
-
-      it('the outline of a box', () => {
-        const img = make();
-        const [x0, y0, x1, y1] = [40, 70, 190, 230];
-        overlayLine(img, { x0, y0, x1, y1: y0, color: ink });
-        overlayLine(img, { x0, y0: y1, x1, y1, color: ink });
-        overlayLine(img, { x0, y0, x1: x0, y1, color: ink });
-        overlayLine(img, { x0: x1, y0, x1, y1, color: ink });
-        expect(report(img, false).issues).toContain('lines');
-      });
-
-      it('a shaded box drawn over the candles (an SMT gap)', () => {
-        const img = make();
-        overlayBox(img, { x0: 50, y0: 80, x1: 190, y1: 240, color: ink, alpha: 0.18 });
-        expect(report(img, false).issues).toContain('shapes');
-      });
-
-      it('price scale numbers on the right', () => {
-        const img = make();
-        ['4523.5', '4518.0', '4512.5', '4507.0', '4501.5'].forEach((t, i) =>
-          overlayText(img, t, img.width - 46, 30 + i * 55, { color: GRAY, scale: 2 }),
-        );
-        expect(report(img, false).issues).toContain('text');
-      });
-
-      it('a faint watermark', () => {
-        const img = make();
-        overlayText(img, '4523', 60, 120, {
-          color: name === 'dark theme' ? [255, 255, 255] : [0, 0, 0],
-          alpha: alphaFaint,
-          scale: 6,
-        });
-        expect(report(img, false).issues).toContain('text');
-      });
-
-      it('survives JPEG: a grid is still found', () => {
-        const img = make();
-        for (const y of [40, 100, 160, 220]) {
-          overlayLine(img, { x0: 0, y0: y, x1: img.width, y1: y, color: ink, alpha: 0.5 });
-        }
-        expect(report(jpegRoundTrip(img, 70), true).issues).toContain('lines');
-      });
-    });
-  }
-
-  it('reports every kind of extra it finds, once each', () => {
-    const base = layout(mixed(6), { style: TV_DEFAULT, pitch: 40, height: 300 });
-    const img = copyImage(renderChart({ ...base, width: base.width + 50 }).image);
-    overlayLine(img, { x0: 0, y0: 80, x1: img.width, y1: 80, color: [41, 98, 255] });
-    overlayBox(img, { x0: 50, y0: 120, x1: 190, y1: 240, color: [41, 98, 255], alpha: 0.18 });
-    ['4523.5', '4518.0', '4512.5'].forEach((t, i) =>
-      overlayText(img, t, img.width - 46, 30 + i * 55, { color: [120, 128, 140] }),
-    );
-    const r = report(img, false);
+// ------------------------------------------------------------------ what is left over
+describe('anything that cannot become a shape is still reported, once', () => {
+  it('marks no candle and no shape explains are reported, as one kind of issue each', () => {
+    const w = 120;
+    const h = 100;
+    const de = new Float32Array(w * h);
+    const candle = {
+      centerX: 20,
+      bodyLeft: 12,
+      bodyRight: 28,
+      bodyTop: 30,
+      bodyBottom: 70,
+      wickTop: 10,
+      wickBottom: 90,
+    };
+    for (let y = 10; y < 90; y++) de[y * w + 20] = 60; // its wick
+    expect(checkClean(de, w, h, [candle])).toEqual({ clean: true, issues: [] });
+    for (let y = 20; y < 70; y++) for (let x = 60; x < 110; x++) de[y * w + x] = 15; // a shaded area
+    const r = checkClean(de, w, h, [candle]);
     expect(r.clean).toBe(false);
-    expect(r.issues).toEqual(expect.arrayContaining(['lines', 'text']));
-    expect(new Set(r.issues).size).toBe(r.issues.length); // each kind once
+    expect(r.issues).toContain('shapes');
   });
-});
 
-describe('the check is about position, not colour', () => {
-  it('a line in the exact colour of the candles is still a line', () => {
+  it('lines, boxes and labels that became shapes no longer count as "not clean"', () => {
     const chart = layout(mixed(6), { style: TV_DEFAULT, pitch: 40, height: 300 });
-    const img = copyImage(renderChart(chart).image);
+    const img = copyImage(renderChart({ ...chart, width: chart.width + 50 }).image);
     overlayLine(img, { x0: 0, y0: 70, x1: img.width, y1: 70, color: [8, 153, 129] });
-    expect(report(img, false).issues).toContain('lines');
-  });
-
-  it('the same candles in different colours get the same answer', () => {
-    for (const style of [TV_DEFAULT, WEIRD_STYLE, DARK_STYLE, HOLLOW_STYLE, PALE_STYLE]) {
-      const chart = layout(mixed(6), { style, pitch: 40, height: 300 });
-      const clean = report(renderChart(chart).image, false);
-      expect(clean.clean, JSON.stringify(style.bull)).toBe(true);
-      const img = copyImage(renderChart(chart).image);
-      const bg = style.background;
-      const ink: Rgb = bg[0] > 128 ? [0, 0, 0] : [255, 255, 255];
-      overlayLine(img, { x0: 0, y0: 70, x1: img.width, y1: 70, color: ink, alpha: 0.8 });
-      expect(report(img, false).clean, JSON.stringify(style.bull)).toBe(false);
-    }
-  });
-});
-
-describe('the issue list never contains anything but the three kinds', () => {
-  it('uses only lines, shapes and text', () => {
-    const allowed: CleanIssue[] = ['lines', 'shapes', 'text'];
-    const chart = layout(mixed(6), { style: TV_DEFAULT, pitch: 40, height: 300 });
-    const img = copyImage(renderChart(chart).image);
-    overlayBox(img, { x0: 20, y0: 20, x1: 200, y1: 260, color: [255, 0, 0], alpha: 0.2 });
-    for (const issue of report(img, false).issues) expect(allowed).toContain(issue);
+    overlayBox(img, { x0: 50, y0: 80, x1: 190, y1: 240, color: [41, 98, 255], alpha: 0.18 });
+    overlayText(img, '4523.5', img.width - 46, 30, { color: [120, 128, 140], scale: 2 });
+    const r = detect(img);
+    expect(r.extras.map((e) => e.kind).sort()).toEqual(['box', 'line', 'text']);
+    expect(r.cleanliness).toEqual({ clean: true, issues: [] });
   });
 });

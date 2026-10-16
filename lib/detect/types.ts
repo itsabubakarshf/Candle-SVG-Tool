@@ -79,6 +79,50 @@ export interface SourceStyle {
 
 import type { CleanReport } from './clean';
 
+/** Anything on the chart that is not a candle, drawn as plain vector shapes. Source pixels. */
+export interface LineExtra {
+  kind: 'line';
+  id: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  /** "#RRGGBB" */
+  color: string;
+  width: number;
+  /** [dash, gap] in pixels for dashed and dotted lines. null = solid. */
+  dash: [number, number] | null;
+}
+
+export interface BoxExtra {
+  kind: 'box';
+  id: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** "#RRGGBB", as it looks on the chart (already blended with the background). */
+  fill: string;
+}
+
+export interface TextExtra {
+  kind: 'text';
+  id: string;
+  /** Left edge and baseline of the text. */
+  x: number;
+  y: number;
+  text: string;
+  /** Font size in pixels. */
+  size: number;
+  color: string;
+  /** Where the letters are in the screenshot (what OCR reads). */
+  region: { x: number; y: number; width: number; height: number };
+  /** The text could not be read: the user has to type it. */
+  unread: boolean;
+}
+
+export type Extra = LineExtra | BoxExtra | TextExtra;
+
 export interface DetectionResult {
   candles: Candle[];
   background: Rgb;
@@ -89,6 +133,8 @@ export interface DetectionResult {
   /** Measured wick thickness, in source pixels. */
   sourceWickWidth: number | null;
   sourceStyle: SourceStyle;
+  /** Lines, boxes and labels found next to the candles. */
+  extras: Extra[];
   /** Whether the image holds only candles. Lines, shapes or text make it "not clean". */
   cleanliness: CleanReport;
 }
