@@ -27,6 +27,19 @@ candles in any colour are fine. The check stays silent when unsure.
 
 In Figma a normal resize keeps wicks and borders thin. The Scale tool (K) scales strokes too.
 
+## Saved presets online
+
+Your presets are also kept in a Supabase database, so you do not log in to save them. The app
+signs each browser in anonymously and row-level security lets a browser see only its own rows.
+Only presets are stored, never screenshots. If the service is off or unreachable the presets
+stay in the browser as before. Presets belong to the browser: clearing site data starts a new
+anonymous user, so Export is still the way to move presets between devices.
+
+Setup: copy `.env.example` to `.env.local` and fill in the project URL and publishable key. In
+Supabase turn on Authentication → Sign In / Providers → Allow anonymous sign-ins. The table is
+`public.presets (user_id, id, name, data, updated_at)`. Free projects pause after a week without
+traffic, so the app only works online while the project is awake.
+
 ## Develop
 
 ```bash

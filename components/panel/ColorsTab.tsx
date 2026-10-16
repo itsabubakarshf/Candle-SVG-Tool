@@ -25,6 +25,7 @@ export function ColorsTab() {
   const activeId = usePresetStore((s) => s.activeId);
   const draft = usePresetStore((s) => s.draft);
   const storageOk = usePresetStore((s) => s.storageOk);
+  const cloud = usePresetStore((s) => s.cloud);
   const edit = usePresetStore(selectActivePreset);
   const setActive = usePresetStore((s) => s.setActive);
   const editDraft = usePresetStore((s) => s.editDraft);
@@ -173,6 +174,13 @@ export function ColorsTab() {
             }}
           />
         </div>
+        {cloud !== 'off' && (
+          <p className="text-xs text-muted-foreground" data-testid="cloud-status">
+            {cloud === 'offline'
+              ? 'Could not reach the online copy. Presets are still saved in this browser.'
+              : 'Presets are also kept online for this browser, with no login. Screenshots are never uploaded.'}
+          </p>
+        )}
         {!storageOk && (
           <p role="alert" className="text-xs text-red-600 dark:text-red-400">
             Your browser blocked saving. Presets will be lost when you close the page. Use Export to

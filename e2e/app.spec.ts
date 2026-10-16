@@ -127,10 +127,18 @@ test.describe('loading a screenshot', () => {
 });
 
 test.describe('privacy and responsiveness (NFR-3, NFR-4)', () => {
-  test('detection runs in a Web Worker and nothing leaves the browser', async ({ page }) => {
+  test('detection runs in a Web Worker and no image leaves the browser', async ({ page }) => {
     const outbound: string[] = [];
     page.on('request', (r) => {
       const url = new URL(r.url());
+      // The only allowed outside traffic is the preset database: its sign-in and presets table.
+      if (
+        url.hostname.endsWith('.supabase.co') &&
+        (url.pathname.startsWith('/auth/v1/') || url.pathname.startsWith('/rest/v1/presets'))
+      ) {
+        expect(r.postData() ?? '').not.toMatch(/data:image|iVBOR|\/9j\//);
+        return;
+      }
       if (r.method() !== 'GET' || !['localhost', '127.0.0.1'].includes(url.hostname)) {
         if (!url.protocol.startsWith('data') && !url.protocol.startsWith('blob'))
           outbound.push(`${r.method()} ${r.url()}`);

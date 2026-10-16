@@ -11,6 +11,15 @@ import {
   saveUserPresets,
 } from '@/lib/presets/storage';
 import type { Preset } from '@/lib/presets/types';
+import {
+  cloudConfigured,
+  deleteCloudPreset,
+  mergeRemote,
+  pullPresets,
+  pushPresets,
+} from '@/lib/presets/cloud';
+
+export type CloudStatus = 'off' | 'syncing' | 'synced' | 'offline';
 
 export type ImportConflictChoice = 'overwrite' | 'keep-both' | 'skip';
 
@@ -23,6 +32,8 @@ interface PresetState {
   hydrated: boolean;
   /** False if the browser refused to save (storage blocked). */
   storageOk: boolean;
+  /** Online copy of the presets: off when not set up, offline when it could not be reached. */
+  cloud: CloudStatus;
 
   /** Loads saved presets. Called once on the client; the server render uses the built-ins. */
   hydrate: () => void;
@@ -59,6 +70,38 @@ export const usePresetStore = create<PresetState>((set, get) => {
     const a = saveUserPresets(presets);
     const b = saveActiveId(activeId);
     set({ storageOk: a && b });
+    pushSoon(presets);
+  };
+
+  let pushTimer: ReturnType<typeof setTimeout> | undefined;
+  const pushSoon = (presets: Preset[]) => {
+    if (!cloudConfigured()) return;
+    clearTimeout(pushTimer);
+    pushTimer = setTimeout(async () => {
+      const ok = await pushPresets(presets.filter((p) => !p.builtIn));
+      set({ cloud: ok ? 'synced' : 'offline' });
+    }, 600);
+  };
+
+  const syncFromCloud = async () => {
+    if (!cloudConfigured()) return;
+    set({ cloud: 'syncing' });
+    const remote = await pullPresets();
+    if (!remote) {
+      set({ cloud: 'offline' });
+      return;
+    }
+    const { presets } = get();
+    const merged = mergeRemote(presets, remote);
+    if (merged.length !== presets.length) {
+      set({ presets: merged });
+      saveUserPresets(merged);
+    }
+    // Presets made before the cloud was on (or while offline) go up now.
+    const have = new Set(remote.map((p) => p.id));
+    const missing = merged.filter((p) => !p.builtIn && !have.has(p.id));
+    const ok = missing.length === 0 || (await pushPresets(missing));
+    set({ cloud: ok ? 'synced' : 'offline' });
   };
 
   return {
@@ -68,6 +111,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
     draft: null,
     hydrated: false,
     storageOk: true,
+    cloud: 'off',
 
     hydrate: () => {
       const user = loadUserPresets();
@@ -76,6 +120,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
       const known = saved === ORIGINAL_ID || presets.some((p) => p.id === saved);
       const activeId = saved && known ? saved : ORIGINAL_ID;
       set({ presets, activeId, draft: null, hydrated: true });
+      void syncFromCloud();
     },
 
     setActive: (id) => {
@@ -176,6 +221,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
       const nextActive = activeId === id ? ORIGINAL_ID : activeId;
       set({ presets: next, activeId: nextActive, draft: null });
       persist(next, nextActive);
+      if (cloudConfigured()) void deleteCloudPreset(id);
       return true;
     },
 
