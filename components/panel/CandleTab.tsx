@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import type { Candle, CandleColors } from '@/lib/detect/types';
 import type { EdgeKey } from '@/lib/edit/ops';
 import { useChartStore } from '@/store/chartStore';
-import { selectActivePreset, usePresetStore } from '@/store/presetStore';
+import { useResolvedPreset } from '@/store/resolvePreset';
+import { candleColors } from '@/lib/svg/geometry';
 import { toast } from 'sonner';
 
 const EDGE_FIELDS: Array<{ key: EdgeKey; label: string; optional?: boolean }> = [
@@ -35,7 +36,7 @@ export function CandleTab() {
   const setEdgeValue = useChartStore((s) => s.setEdgeValue);
   const splitSelected = useChartStore((s) => s.splitSelected);
   const mergeSelected = useChartStore((s) => s.mergeSelected);
-  const preset = usePresetStore(selectActivePreset);
+  const preset = useResolvedPreset();
 
   const selected = candles
     .filter((c) => selectedIds.includes(c.id))
@@ -55,8 +56,7 @@ export function CandleTab() {
   const hasOverride = selected.some(
     (c) => c.colorOverride && Object.keys(c.colorOverride).length > 0,
   );
-  const colorOf = (c: Candle, key: keyof CandleColors) =>
-    c.colorOverride?.[key] ?? preset[c.type][key];
+  const colorOf = (c: Candle, key: keyof CandleColors) => candleColors(c, preset)[key];
 
   return (
     <div className="space-y-5">

@@ -3,7 +3,7 @@
 import type { PointerEvent } from 'react';
 import { candleShape } from '@/lib/svg/geometry';
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
-import { selectActivePreset, usePresetStore } from '@/store/presetStore';
+import { useResolvedPreset } from '@/store/resolvePreset';
 import { useUiStore } from '@/store/uiStore';
 import { Handles } from './Handles';
 
@@ -19,7 +19,7 @@ export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
   const candles = useChartStore((s) => s.candles);
   const selectedIds = useChartStore((s) => s.selectedIds);
   const select = useChartStore((s) => s.select);
-  const preset = usePresetStore(selectActivePreset);
+  const preset = useResolvedPreset();
   const opacity = useUiStore((s) => s.overlayOpacity);
   const tab = useUiStore((s) => s.tab);
   const setTab = useUiStore((s) => s.setTab);

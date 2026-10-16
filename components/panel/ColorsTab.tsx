@@ -9,6 +9,8 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { downloadText } from '@/lib/export/download';
 import type { CandleColors } from '@/lib/detect/types';
+import { ORIGINAL_ID, ORIGINAL_NAME } from '@/lib/presets/builtins';
+import { useChartStore } from '@/store/chartStore';
 import { selectActivePreset, usePresetStore } from '@/store/presetStore';
 import { cn } from '@/lib/utils';
 
@@ -33,7 +35,10 @@ export function ColorsTab() {
   const remove = usePresetStore((s) => s.remove);
   const importJson = usePresetStore((s) => s.importJson);
   const exportJson = usePresetStore((s) => s.exportJson);
+  const createFromSource = usePresetStore((s) => s.createFromSource);
+  const sourceStyle = useChartStore((s) => s.result?.sourceStyle ?? null);
   const fileInput = useRef<HTMLInputElement>(null);
+  const isOriginal = activeId === ORIGINAL_ID;
 
   const active = presets.find((p) => p.id === activeId);
   const dirty = draft !== null;
@@ -64,6 +69,23 @@ export function ColorsTab() {
     <div className="space-y-5">
       <section aria-label="Presets" className="space-y-2">
         <ul className="space-y-0.5" role="listbox" aria-label="Preset list">
+          <li>
+            <button
+              type="button"
+              role="option"
+              aria-selected={isOriginal}
+              onClick={() => setActive(ORIGINAL_ID)}
+              className={cn(
+                'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                isOriginal && 'bg-muted font-medium',
+              )}
+            >
+              <span className="truncate">{ORIGINAL_NAME}</span>
+              <span className="ml-2 text-[10px] uppercase text-muted-foreground">
+                from your chart
+              </span>
+            </button>
+          </li>
           {presets.map((p) => (
             <li key={p.id}>
               <button
@@ -101,6 +123,7 @@ export function ColorsTab() {
           <Button
             variant="outline"
             size="sm"
+            disabled={isOriginal}
             onClick={() => duplicate(activeId)}
             title="Duplicate the selected preset"
           >
@@ -158,90 +181,102 @@ export function ColorsTab() {
         )}
       </section>
 
-      <section aria-label="Editor" className="space-y-3 border-t border-border pt-4">
-        <label className="space-y-1 text-xs text-muted-foreground">
-          Name
-          <Input
-            value={edit.name}
-            maxLength={60}
-            onChange={(e) => editDraft({ name: e.target.value })}
-          />
-        </label>
-
-        {(['bull', 'bear'] as const).map((side) => (
-          <fieldset key={side} className="space-y-2 pt-1">
-            <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-              {side}
-            </legend>
-            {FIELDS.map(({ key, label }) => (
-              <ColorField
-                key={key}
-                label={label}
-                value={edit[side][key]}
-                onChange={(hex) => setColor(side, key, hex)}
-              />
-            ))}
-          </fieldset>
-        ))}
-
-        <div className="grid grid-cols-2 gap-3">
-          <NumberField
-            label="Border width (px)"
-            value={edit.borderWidth}
-            onChange={(v) => editDraft({ borderWidth: v })}
-          />
-          <NumberField
-            label="Wick width (px)"
-            value={edit.wickWidth}
-            onChange={(v) => editDraft({ wickWidth: v })}
-          />
-        </div>
-
-        <div className="space-y-2">
-          <label className="flex items-center justify-between gap-3 text-sm">
-            Transparent background
-            <Switch
-              checked={edit.background === null}
-              onCheckedChange={(v) => editDraft({ background: v ? null : '#FFFFFF' })}
+      {isOriginal ? (
+        <OriginalPanel
+          hasImage={sourceStyle !== null}
+          style={sourceStyle}
+          onSave={() => {
+            if (!sourceStyle) return;
+            const saved = createFromSource(sourceStyle);
+            toast.success(`Saved "${saved.name}". You can edit it now.`);
+          }}
+        />
+      ) : (
+        <section aria-label="Editor" className="space-y-3 border-t border-border pt-4">
+          <label className="space-y-1 text-xs text-muted-foreground">
+            Name
+            <Input
+              value={edit.name}
+              maxLength={60}
+              onChange={(e) => editDraft({ name: e.target.value })}
             />
           </label>
-          {edit.background !== null && (
-            <ColorField
-              label="Background"
-              value={edit.background}
-              onChange={(hex) => editDraft({ background: hex })}
-            />
-          )}
-        </div>
 
-        {edit.builtIn && (
-          <p className="text-xs text-muted-foreground">
-            Built-in presets can&apos;t be changed. Saving your edits makes a new preset.
-          </p>
-        )}
-        <div className="grid grid-cols-2 gap-2">
-          <Button
-            size="sm"
-            disabled={!dirty}
-            onClick={() => {
-              const saved = saveDraft();
-              if (saved) toast.success(`Saved "${saved.name}".`);
-            }}
-          >
-            <Save className="h-3.5 w-3.5" aria-hidden />
-            Save
-          </Button>
-          <Button variant="outline" size="sm" disabled={!dirty} onClick={discardDraft}>
-            <Undo2 className="h-3.5 w-3.5" aria-hidden />
-            Revert
-          </Button>
-        </div>
-        {dirty && (
-          <p className="text-xs text-amber-600 dark:text-amber-400">
-            Unsaved changes (shown live).
-          </p>
-        )}
-      </section>
+          {(['bull', 'bear'] as const).map((side) => (
+            <fieldset key={side} className="space-y-2 pt-1">
+              <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {side}
+              </legend>
+              {FIELDS.map(({ key, label }) => (
+                <ColorField
+                  key={key}
+                  label={label}
+                  value={edit[side][key]}
+                  onChange={(hex) => setColor(side, key, hex)}
+                />
+              ))}
+            </fieldset>
+          ))}
+
+          <div className="grid grid-cols-2 gap-3">
+            <NumberField
+              label="Border width (px)"
+              value={edit.borderWidth}
+              onChange={(v) => editDraft({ borderWidth: v })}
+            />
+            <NumberField
+              label="Wick width (px)"
+              value={edit.wickWidth}
+              onChange={(v) => editDraft({ wickWidth: v })}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="flex items-center justify-between gap-3 text-sm">
+              Transparent background
+              <Switch
+                checked={edit.background === null}
+                onCheckedChange={(v) => editDraft({ background: v ? null : '#FFFFFF' })}
+              />
+            </label>
+            {edit.background !== null && (
+              <ColorField
+                label="Background"
+                value={edit.background}
+                onChange={(hex) => editDraft({ background: hex })}
+              />
+            )}
+          </div>
+
+          {edit.builtIn && (
+            <p className="text-xs text-muted-foreground">
+              Built-in presets can&apos;t be changed. Saving your edits makes a new preset.
+            </p>
+          )}
+          <div className="grid grid-cols-2 gap-2">
+            <Button
+              size="sm"
+              disabled={!dirty}
+              onClick={() => {
+                const saved = saveDraft();
+                if (saved) toast.success(`Saved "${saved.name}".`);
+              }}
+            >
+              <Save className="h-3.5 w-3.5" aria-hidden />
+              Save
+            </Button>
+            <Button variant="outline" size="sm" disabled={!dirty} onClick={discardDraft}>
+              <Undo2 className="h-3.5 w-3.5" aria-hidden />
+              Revert
+            </Button>
+          </div>
+          {dirty && (
+            <p className="text-xs text-amber-600 dark:text-amber-400">
+              Unsaved changes (shown live).
+            </p>
+          )}
+        </section>
+      )}
     </div>
   );
 }
@@ -270,5 +305,76 @@ function NumberField({
         }}
       />
     </label>
+  );
+}
+
+function Swatches({
+  label,
+  colors,
+}: {
+  label: string;
+  colors: { body: string; border: string; wick: string } | null;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 text-sm">
+      <span className="capitalize">{label}</span>
+      {colors ? (
+        <span className="flex items-center gap-3 text-xs text-muted-foreground">
+          {(['body', 'border', 'wick'] as const).map((k) => (
+            <span key={k} className="flex items-center gap-1" title={`${k}: ${colors[k]}`}>
+              <span
+                className="h-4 w-4 rounded-sm border border-border"
+                style={{ background: colors[k] }}
+                aria-hidden
+              />
+              <span className="font-mono">{colors[k]}</span>
+            </span>
+          ))}
+        </span>
+      ) : (
+        <span className="text-xs text-muted-foreground">none in this chart</span>
+      )}
+    </div>
+  );
+}
+
+function OriginalPanel({
+  hasImage,
+  style,
+  onSave,
+}: {
+  hasImage: boolean;
+  style: import('@/lib/detect/types').SourceStyle | null;
+  onSave: () => void;
+}) {
+  return (
+    <section aria-label="Original colours" className="space-y-3 border-t border-border pt-4">
+      <p className="text-sm">
+        The SVG uses the colours, border and wick widths found in your screenshot. Nothing is
+        repainted.
+      </p>
+      {hasImage && style ? (
+        <>
+          <div className="space-y-2" data-testid="original-colours">
+            <Swatches label="bull" colors={style.bull} />
+            <Swatches label="bear" colors={style.bear} />
+            <p className="text-xs text-muted-foreground">
+              Border {style.borderWidth} px · wick {style.wickWidth} px · background{' '}
+              {style.background}
+            </p>
+          </div>
+          <Button variant="outline" size="sm" onClick={onSave}>
+            <Save className="h-3.5 w-3.5" aria-hidden />
+            Save as preset
+          </Button>
+          <p className="text-xs text-muted-foreground">
+            Want different colours? Pick Light, Dark or your own preset above, or save these as a
+            preset and edit it. A single odd candle keeps its own colour too.
+          </p>
+        </>
+      ) : (
+        <p className="text-xs text-muted-foreground">Load a screenshot to see its colours here.</p>
+      )}
+    </section>
   );
 }

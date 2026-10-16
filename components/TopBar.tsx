@@ -5,6 +5,7 @@ import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { copySvg } from '@/lib/export/actions';
 import { useChartStore } from '@/store/chartStore';
+import { ORIGINAL_ID, ORIGINAL_NAME } from '@/lib/presets/builtins';
 import { usePresetStore } from '@/store/presetStore';
 import { useUiStore } from '@/store/uiStore';
 
@@ -32,6 +33,7 @@ export function TopBar() {
             onChange={(e) => setActive(e.target.value)}
             className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
+            <option value={ORIGINAL_ID}>{ORIGINAL_NAME}</option>
             {presets.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}

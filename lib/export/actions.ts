@@ -1,6 +1,6 @@
 import { toast } from 'sonner';
 import { buildSvg } from '@/lib/svg/buildSvg';
-import { selectActivePreset, usePresetStore } from '@/store/presetStore';
+import { getResolvedPreset } from '@/store/resolvePreset';
 import { useChartStore } from '@/store/chartStore';
 import { useUiStore } from '@/store/uiStore';
 import { copyText } from './clipboard';
@@ -11,7 +11,7 @@ import { svgToPngBlob } from './png';
 export function currentSvg(): string | null {
   const { image, candles } = useChartStore.getState();
   if (!image || candles.length === 0) return null;
-  const preset = selectActivePreset(usePresetStore.getState());
+  const preset = getResolvedPreset();
   const { exportBackground } = useUiStore.getState();
   return buildSvg(
     candles,
