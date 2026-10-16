@@ -85,6 +85,45 @@ describe('real screenshots with a box, a line and a label', () => {
   });
 });
 
+describe('third screenshot: a slanted line that touches a wick, a label beside a candle', () => {
+  const r = detect(load('extras-c.png'));
+
+  it('reads the 4 candles at their real width (nothing else is mistaken for a candle)', () => {
+    expect(r.candles).toHaveLength(4);
+    for (const c of r.candles) expect(near(c.bodyRight - c.bodyLeft, 25, 1.5)).toBe(true);
+    expect(r.candles.map((c) => Math.round(c.bodyLeft))).toEqual([10, 43, 77, 110]);
+    expect(r.candles[3]?.type).toBe('bear');
+    expect(r.cleanliness).toEqual({ clean: true, issues: [] });
+  });
+
+  it('finds the box, the slanted line, the left tick and the dotted line', () => {
+    const b = boxes(r)[0] as BoxExtra;
+    expect([b.x, b.y, b.width, b.height]).toEqual([23, 242, 133, 103]);
+    const slanted = lines(r).filter(
+      (l) => Math.abs(l.x1 - l.x2) > 0.01 && Math.abs(l.y1 - l.y2) > 0.01,
+    );
+    expect(slanted).toHaveLength(1);
+    const s = slanted[0] as LineExtra;
+    expect(near(Math.max(s.x1, s.x2), 123.5, 1.5) && near(Math.min(s.x1, s.x2), 88, 1.5)).toBe(
+      true,
+    );
+    expect(near(Math.min(s.y1, s.y2), 181.3, 2) && near(Math.max(s.y1, s.y2), 242.3, 2)).toBe(true);
+    const dotted = lines(r).filter((l) => l.dash !== null);
+    expect(dotted).toHaveLength(1);
+    expect((dotted[0] as LineExtra).width).toBe(1);
+    expect(lines(r).filter((l) => Math.abs(l.x1 - l.x2) < 0.01)).toHaveLength(1); // the tick on the left edge
+  });
+
+  it('finds the label even though its letters touch, and keeps how it looks', () => {
+    const t = texts(r);
+    expect(t).toHaveLength(1);
+    const label = t[0] as TextExtra;
+    expect([label.region.x, label.region.y]).toEqual([126, 437]);
+    expect(label.from).toEqual(label.region);
+    expect(label.trace).toMatch(/^M\d+ \d+h/);
+  });
+});
+
 // ------------------------------------------------------------------ synthetic charts
 const spec = (
   type: 'bull' | 'bear',

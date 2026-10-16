@@ -60,24 +60,31 @@ describe('the label crop', () => {
 });
 
 describe('reading a real label', () => {
-  it('reads 18:00 from the second screenshot', async () => {
-    const image = load('extras-b.png');
-    const label = detect(image).extras.find((e) => e.kind === 'text') as TextExtra;
-    const crop = labelCrop(image, label.region);
-    const png = new PNG({ width: crop.width, height: crop.height });
-    png.data = Buffer.from(crop.data);
-    const worker = await createWorker('eng', 1, {
-      langPath: path.join(process.cwd(), 'node_modules/@tesseract.js-data/eng/4.0.0_best_int'),
-      gzip: true,
-      cachePath: path.join(process.cwd(), 'node_modules/.cache/tesseract'),
-    });
-    try {
-      await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE });
-      const { data } = await worker.recognize(PNG.sync.write(png));
-      expect(tidyText(data.text)).toBe('18:00');
-      expect(data.confidence).toBeGreaterThan(60);
-    } finally {
-      await worker.terminate();
-    }
-  }, 120_000);
+  it.each([
+    ['extras-b.png', '18:00'],
+    ['extras-c.png', '06:00'],
+  ])(
+    'reads the time label of %s',
+    async (file, expected) => {
+      const image = load(file);
+      const label = detect(image).extras.find((e) => e.kind === 'text') as TextExtra;
+      const crop = labelCrop(image, label.region);
+      const png = new PNG({ width: crop.width, height: crop.height });
+      png.data = Buffer.from(crop.data);
+      const worker = await createWorker('eng', 1, {
+        langPath: path.join(process.cwd(), 'node_modules/@tesseract.js-data/eng/4.0.0_best_int'),
+        gzip: true,
+        cachePath: path.join(process.cwd(), 'node_modules/.cache/tesseract'),
+      });
+      try {
+        await worker.setParameters({ tessedit_pageseg_mode: PSM.SINGLE_LINE });
+        const { data } = await worker.recognize(PNG.sync.write(png));
+        expect(tidyText(data.text)).toBe(expected);
+        expect(data.confidence).toBeGreaterThan(60);
+      } finally {
+        await worker.terminate();
+      }
+    },
+    120_000,
+  );
 });

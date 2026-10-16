@@ -115,10 +115,17 @@ export interface TextExtra {
   /** Font size in pixels. */
   size: number;
   color: string;
-  /** Where the letters are in the screenshot (what OCR reads). */
+  /** Where the label sits now (it follows the label when it is moved). */
   region: { x: number; y: number; width: number; height: number };
+  /** Where its letters are in the screenshot (what OCR reads). Never changes. */
+  from?: { x: number; y: number; width: number; height: number };
   /** The text could not be read: the user has to type it. */
   unread: boolean;
+  /**
+   * The letters as they look in the screenshot, as an SVG path (pixel squares). Exported in
+   * place of the text while nothing has been typed, so the label is never lost.
+   */
+  trace?: string;
 }
 
 export type Extra = LineExtra | BoxExtra | TextExtra;

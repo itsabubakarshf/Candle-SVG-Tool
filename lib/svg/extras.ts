@@ -26,8 +26,10 @@ export function byKind(extras: Extra[]) {
   return {
     boxes: sorted(extras.filter((e) => e.kind === 'box')) as BoxExtra[],
     lines: sorted(extras.filter((e) => e.kind === 'line')) as LineExtra[],
-    // labels with nothing in them have nothing to draw
-    texts: sorted(extras.filter((e) => e.kind === 'text' && e.text.trim() !== '')) as TextExtra[],
+    // a label nobody has typed yet is drawn as it looked in the screenshot (traced), if known
+    texts: sorted(
+      extras.filter((e) => e.kind === 'text' && (e.text.trim() !== '' || e.trace)),
+    ) as TextExtra[],
   };
 }
 
@@ -41,6 +43,9 @@ export function lineSvg(l: LineExtra, index: number): string {
 }
 
 export function textSvg(t: TextExtra, index: number): string {
+  if (t.text.trim() === '' && t.trace) {
+    return `    <path id="Label ${pad(index + 1)} (not read)" d="${t.trace}" fill="${t.color}"/>`;
+  }
   return `    <text id="Label ${pad(index + 1)}" x="${fmt(t.x)}" y="${fmt(t.y)}" font-family="${LABEL_FONT}" font-size="${fmt(t.size)}" fill="${t.color}">${escapeXml(t.text)}</text>`;
 }
 

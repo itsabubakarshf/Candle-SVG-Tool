@@ -19,7 +19,7 @@ const MIN_CLUSTER_COVERAGE = 2;
  * Step 4: split the image into candle columns.
  * A column is "active" when some pixel in it is at least half covered.
  */
-export function segmentColumns(
+export function columnRuns(
   de: Float32Array,
   width: number,
   height: number,
@@ -53,8 +53,21 @@ export function segmentColumns(
     }
   }
 
+  return runs;
+}
+
+/** Candle columns: the runs of active columns, with touching candles cut apart. */
+export function segmentColumns(
+  de: Float32Array,
+  width: number,
+  height: number,
+  settings: DetectSettings,
+): Cluster[] {
+  const strong = strongThreshold(settings);
   const out: Cluster[] = [];
-  for (const run of runs) out.push(...splitCluster(de, width, height, strong, run));
+  for (const run of columnRuns(de, width, height, settings)) {
+    out.push(...splitCluster(de, width, height, strong, run));
+  }
   return out;
 }
 
@@ -219,4 +232,68 @@ function boundaryBetween(count: number[], p: number, q: number): number {
     if (last - first <= 4) return Math.floor((first + last) / 2) + 1;
   }
   return Math.ceil((p + q) / 2);
+}
+
+/**
+ * A label or a stray mark in the same columns as a candle, but far away from it vertically,
+ * would be read as part of that candle. A candle's ink is one unbroken stretch from its top
+ * to its bottom, so a small, separate stretch of ink in its columns is not the candle.
+ * Returns copies of the maps with those stretches blanked (or the originals if none).
+ */
+export function blankStrays(
+  de: Float32Array,
+  dl: Float32Array,
+  width: number,
+  height: number,
+  clusters: Cluster[],
+  settings: DetectSettings,
+): { de: Float32Array; dl: Float32Array } {
+  const strong = strongThreshold(settings);
+  let outDe: Float32Array | null = null;
+  let outDl: Float32Array | null = null;
+  for (const c of clusters) {
+    const inkPerRow = new Int32Array(height);
+    for (let y = 0; y < height; y++) {
+      for (let x = c.left; x <= c.right; x++) {
+        if ((de[y * width + x] as number) >= strong) inkPerRow[y] = (inkPerRow[y] as number) + 1;
+      }
+    }
+    // stretches of rows with ink, separated by at least 10 blank rows
+    const runs: Array<{ from: number; to: number; ink: number }> = [];
+    let y = 0;
+    while (y < height) {
+      if ((inkPerRow[y] as number) === 0) {
+        y++;
+        continue;
+      }
+      let to = y;
+      let ink = 0;
+      let blank = 0;
+      for (let k = y; k < height; k++) {
+        if ((inkPerRow[k] as number) > 0) {
+          to = k;
+          ink += inkPerRow[k] as number;
+          blank = 0;
+        } else if (++blank >= 10) break;
+      }
+      runs.push({ from: y, to, ink });
+      y = to + 1;
+    }
+    if (runs.length < 2) continue;
+    const main = runs.reduce((a, b) => (b.ink > a.ink ? b : a));
+    for (const r of runs) {
+      if (r === main) continue;
+      // only small stretches: another candle of the same size is not a stray
+      if (r.ink > 0.3 * main.ink || r.to - r.from + 1 > 0.4 * (main.to - main.from + 1)) continue;
+      outDe ??= new Float32Array(de);
+      outDl ??= new Float32Array(dl);
+      for (let yy = r.from; yy <= r.to; yy++) {
+        for (let x = c.left; x <= c.right; x++) {
+          outDe[yy * width + x] = 0;
+          outDl[yy * width + x] = 0;
+        }
+      }
+    }
+  }
+  return { de: outDe ?? de, dl: outDl ?? dl };
 }

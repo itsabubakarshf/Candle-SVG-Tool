@@ -19,6 +19,7 @@ interface CandleOverlayProps {
 export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
   const candles = useChartStore((s) => s.candles);
   const extras = useChartStore((s) => s.extras);
+  const background = useChartStore((s) => s.result?.background);
   const selectedIds = useChartStore((s) => s.selectedIds);
   const select = useChartStore((s) => s.select);
   const preset = useResolvedPreset();
@@ -48,6 +49,21 @@ export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
       height="100%"
       style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}
     >
+      {/* a typed label replaces the letters of the screenshot, so they are covered, not doubled */}
+      <g data-testid="text-covers">
+        {extras.map((e) =>
+          e.kind === 'text' && e.text.trim() !== '' && e.from && background ? (
+            <rect
+              key={e.id}
+              x={e.from.x - 1}
+              y={e.from.y - 1}
+              width={e.from.width + 2}
+              height={e.from.height + 2}
+              fill={`rgb(${background[0]},${background[1]},${background[2]})`}
+            />
+          ) : null,
+        )}
+      </g>
       <g opacity={opacity} data-testid="overlay-shapes">
         <ExtraShapes extras={extras} layer="below" />
         {ordered.map((c, i) => {

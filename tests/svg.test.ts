@@ -252,3 +252,44 @@ describe('Original colours in the SVG', () => {
     expect(buildSvg([candle()], preset, SIZE, { background: true })).toContain('fill="#131722"/>');
   });
 });
+
+describe('extras in the SVG', () => {
+  const text = (over: Partial<import('@/lib/detect/types').TextExtra>) =>
+    ({
+      kind: 'text',
+      id: 'text-01',
+      x: 10,
+      y: 20,
+      text: '06:00',
+      size: 10,
+      color: '#191919',
+      region: { x: 10, y: 12, width: 27, height: 7 },
+      unread: false,
+      ...over,
+    }) as import('@/lib/detect/types').TextExtra;
+
+  it('typed text becomes a text layer, with the characters escaped', () => {
+    const svg = buildSvg([candle()], LIGHT_PRESET, SIZE, { extras: [text({ text: 'A&B <1>' })] });
+    expect(svg).toContain('<g id="Labels">');
+    expect(svg).toContain('>A&amp;B &lt;1&gt;</text>');
+  });
+
+  it('a label nobody has typed yet is kept as the traced letters, then replaced by the text', () => {
+    const traced = text({ text: '', unread: true, trace: 'M0 0h2v2h-2z' });
+    const before = buildSvg([candle()], LIGHT_PRESET, SIZE, { extras: [traced] });
+    expect(before).toContain('<path id="Label 01 (not read)" d="M0 0h2v2h-2z" fill="#191919"/>');
+    expect(before).not.toContain('<text');
+    const after = buildSvg([candle()], LIGHT_PRESET, SIZE, {
+      extras: [{ ...traced, text: 'Entry', unread: false }],
+    });
+    expect(after).toContain('>Entry</text>');
+    expect(after).not.toContain('(not read)');
+  });
+
+  it('a label with neither text nor trace draws nothing', () => {
+    const svg = buildSvg([candle()], LIGHT_PRESET, SIZE, {
+      extras: [text({ text: '', unread: true })],
+    });
+    expect(svg).not.toContain('Labels');
+  });
+});

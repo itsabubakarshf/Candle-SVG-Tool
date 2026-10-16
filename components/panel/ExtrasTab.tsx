@@ -40,8 +40,8 @@ export function ExtrasTab() {
         </p>
         {unread > 0 && (
           <p className="text-sm text-amber-600 dark:text-amber-400" data-testid="unread-count">
-            {unread} {unread === 1 ? 'label' : 'labels'} could not be read. Double-click it on the
-            picture to type it.
+            {unread} {unread === 1 ? 'label' : 'labels'} could not be read. It is kept as it looks
+            in the screenshot until you type it: double-click it on the picture.
           </p>
         )}
         <p className="text-xs text-muted-foreground">

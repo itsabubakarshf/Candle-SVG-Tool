@@ -7,7 +7,7 @@ import { checkClean, stripLongLines } from './clean';
 import { findExtras, withoutFootprint, withoutFootprintDe } from './extras';
 import { confidenceScore } from './confidence';
 import { colourMaps } from './coverage';
-import { segmentColumns } from './segment';
+import { blankStrays, columnRuns, segmentColumns } from './segment';
 import {
   DEFAULT_SETTINGS,
   type Candle,
@@ -33,7 +33,18 @@ export function detect(
   const { width, height } = image;
   const background = findBackground(image);
   const raw = colourMaps(image, background);
-  const read = (de: Float32Array, dl: Float32Array): Measured[] => {
+  const read = (deIn: Float32Array, dlIn: Float32Array): Measured[] => {
+    let de = deIn;
+    let dl = dlIn;
+    // a label above or below a candle must not stretch it
+    ({ de, dl } = blankStrays(
+      de,
+      dl,
+      width,
+      height,
+      columnRuns(de, width, height, settings),
+      settings,
+    ));
     const clusters = segmentColumns(de, width, height, settings);
     const out: Measured[] = [];
     clusters.forEach((c, i) => {
@@ -77,6 +88,9 @@ export function detect(
         const tiny =
           (widths[i] as number) < 0.4 * typicalW && (heights[i] as number) < 0.5 * typicalH;
         if (tiny) return false;
+        // a short run of letters read as a small flat candle: narrower than the real ones and
+        // hardly any height at all
+        if ((heights[i] as number) <= 14 && (widths[i] as number) < 0.7 * typicalW) return false;
         // several labels stacked in one column also look like one narrow candle: a real one is
         // unbroken from its top to its bottom
         if ((widths[i] as number) < 0.5 * typicalW) {

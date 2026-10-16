@@ -11,6 +11,7 @@ import { rgbToHex } from '@/lib/svg/hex';
 import { overWhite } from './background';
 import type { CandleExtent } from './clean';
 import { candleMask } from './mask';
+import { findSlanted } from './slanted';
 import type { BoxExtra, Extra, LineExtra, PixelImage, TextExtra } from './types';
 
 /** ΔE from the background at which a mark exists at all. */
@@ -617,6 +618,49 @@ function groupText(cands: Comp[]): TextGroup[] {
 
 // ---------------------------------------------------------------------------------------------
 
+/** The marked pixels as an SVG path: one rectangle per run of identical rows. */
+export function tracePixels(pixels: number[], width: number): string {
+  const rows = new Map<number, number[]>();
+  for (const p of pixels) {
+    const y = Math.floor(p / width);
+    const list = rows.get(y);
+    if (list) list.push(p % width);
+    else rows.set(y, [p % width]);
+  }
+  // runs per row
+  const runs: Array<{ y: number; x0: number; x1: number }> = [];
+  for (const [y, xs] of rows) {
+    xs.sort((a, b) => a - b);
+    let from = xs[0] as number;
+    let prev = from;
+    for (const x of xs.slice(1)) {
+      if (x !== prev + 1) {
+        runs.push({ y, x0: from, x1: prev });
+        from = x;
+      }
+      prev = x;
+    }
+    runs.push({ y, x0: from, x1: prev });
+  }
+  // stack runs with the same extent in consecutive rows
+  runs.sort((a, b) => a.x0 - b.x0 || a.x1 - b.x1 || a.y - b.y);
+  const rects: Array<{ x0: number; x1: number; y0: number; y1: number }> = [];
+  const open = new Map<string, { x0: number; x1: number; y0: number; y1: number }>();
+  for (const r of runs) {
+    const key = `${r.x0}:${r.x1}`;
+    const cur = open.get(key);
+    if (cur && cur.y1 === r.y - 1) cur.y1 = r.y;
+    else {
+      const next = { x0: r.x0, x1: r.x1, y0: r.y, y1: r.y };
+      rects.push(next);
+      open.set(key, next);
+    }
+  }
+  return rects
+    .map((r) => `M${r.x0} ${r.y0}h${r.x1 - r.x0 + 1}v${r.y1 - r.y0 + 1}h${-(r.x1 - r.x0 + 1)}z`)
+    .join('');
+}
+
 /** A "line" that runs along a candle's own edge or wick is that candle, not a separate line. */
 function isCandleEdge(l: LineExtra, candles: CandleExtent[]): boolean {
   const len = Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
@@ -864,14 +908,14 @@ export function findExtras(
     return last;
   };
 
-  const pushLine = (members: Comp[], patterned: boolean) => {
+  const pushLine = (members: Comp[], patterned: boolean, noWalk = false) => {
     const px = pixelsOf(members);
     const fit = fitLine(px, ink, width);
     const dx = Math.cos(fit.angle);
     const dy = Math.sin(fit.angle);
     const extra = new Set<number>();
     let { t0, t1 } = fit;
-    if (!patterned) {
+    if (!patterned && !noWalk) {
       const lo = walk(fit, -1, extra);
       const hi = walk(fit, 1, extra);
       t0 = Math.min(t0, lo);
@@ -900,7 +944,7 @@ export function findExtras(
       );
     }
     const per = weight / Math.max(1, ts.size);
-    const widthPx = per >= 0.6 && per <= 1.45 ? 1 : Math.max(0.5, half(per));
+    const widthPx = per <= 1.45 ? 1 : half(per);
 
     // dashes: pitch and dash length
     let dash: [number, number] | null = null;
@@ -918,10 +962,24 @@ export function findExtras(
         const first = sorted[0] as { m: Comp; t: number };
         const last = sorted[sorted.length - 1] as { m: Comp; t: number };
         t0 = Math.min(first.t - real(first.m) / 2, t0);
-        // the pattern may continue where a candle's margin hid the next dots
+        // Is there ink at this spot of the line (across its thickness)?
+        const inkAt = (t: number): boolean => {
+          for (let o = -1; o <= 1; o++) {
+            const x = Math.floor(fit.cx + t * dx - o * dy);
+            const y = Math.floor(fit.cy + t * dy + o * dx);
+            if (x < 0 || y < 0 || x >= width || y >= height) continue;
+            const p = y * width + x;
+            if (!body[p] && (ink[p] as number) >= WEAK) return true;
+          }
+          return false;
+        };
+        const gapLen = Math.max(0.5, pitch - on);
+        // the pattern may continue where a candle's margin hid the next dots, but only while
+        // there are real gaps between them (ink all the way along is a line or edge of its own)
         const reach = (from: number, dir: 1 | -1): number => {
           let at = from;
           for (let k = 1; k <= 8; k++) {
+            if (inkAt(from + dir * ((k - 1) * pitch + on / 2 + gapLen / 2))) break;
             const t = from + dir * k * pitch;
             const x = fit.cx + t * dx;
             const y = fit.cy + t * dy;
@@ -952,7 +1010,14 @@ export function findExtras(
           background[1] - lineRgb[1],
           background[2] - lineRgb[2],
         );
-        for (let t = t0 + (on > 0 ? 0 : 0); t < t1; t += pitch) {
+        for (let t = t0; t < t1; t += pitch) {
+          // a dash with ink in the gap beside it is not a dash: it lies on something solid
+          if (
+            (t - gapLen / 2 > t0 && inkAt(t - gapLen / 2)) ||
+            (t + on + gapLen / 2 < t1 && inkAt(t + on + gapLen / 2))
+          ) {
+            continue;
+          }
           for (let s = 0; s < on; s += 0.5) {
             for (let o = -1; o <= 1; o++) {
               const x = Math.floor(fit.cx + (t + s) * dx - o * dy);
@@ -1024,6 +1089,13 @@ export function findExtras(
       }
     }
   }
+  // Slanted lines can touch a wick, so they are found by their shape alone, before the candles
+  // are known. (Later, with the candles known, they are ordinary pieces.)
+  if (options.patternedOnly) {
+    for (const run of findSlanted(ink, width, height, weak)) {
+      pushLine([analyse(run.pixels, ink, width, area, height)], false, true);
+    }
+  }
   lines.forEach((l, i) => {
     if (isCandleEdge(l, candles)) {
       // not a line of its own: a border or wick of a candle that was only partly read
@@ -1045,8 +1117,8 @@ export function findExtras(
     const gh = g.y1 - g.y0 + 1;
     // letters of one size, at least three of them: a label, a price, a time, a watermark
     const tall = real.filter((c) => c.y1 - c.y0 + 1 >= 0.6 * gh);
-    // (small letters can touch and join up, so a long, low group of two also counts)
-    const wide = g.x1 - g.x0 + 1 >= 2.2 * gh && real.length >= 2;
+    // (small letters can touch and join up, so a long, low group also counts)
+    const wide = g.x1 - g.x0 + 1 >= 2.2 * gh && (real.length >= 2 || (real[0]?.size ?? 0) >= 40);
     if (tall.length < 3 && !wide) continue;
     if (gh < 5 || gh > 64) continue;
     // marks that only lean on a candle are leftovers of it, not text
@@ -1076,7 +1148,12 @@ export function findExtras(
       size: Math.max(6, Math.round(cap / 0.716)),
       color: rgbToHex([col[0] / n, col[1] / n, col[2] / n]),
       region: { x: g.x0, y: g.y0, width: g.x1 - g.x0 + 1, height: gh },
+      from: { x: g.x0, y: g.y0, width: g.x1 - g.x0 + 1, height: gh },
       unread: true,
+      trace: tracePixels(
+        pix.filter((p) => (ink[p] as number) >= 0.45 * peak),
+        width,
+      ),
     };
     extras.push(text);
     for (const p of pix) footprint[p] = 1;

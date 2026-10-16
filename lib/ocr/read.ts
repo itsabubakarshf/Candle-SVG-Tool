@@ -65,7 +65,7 @@ export async function readLabels(file: Blob, labels: TextExtra[]): Promise<ReadL
   const [worker, image] = await Promise.all([recogniser(), pixelsOf(file)]);
   const out: ReadLabel[] = [];
   for (const label of labels) {
-    const crop = labelCrop(image, label.region);
+    const crop = labelCrop(image, label.from ?? label.region);
     const canvas = document.createElement('canvas');
     canvas.width = crop.width;
     canvas.height = crop.height;

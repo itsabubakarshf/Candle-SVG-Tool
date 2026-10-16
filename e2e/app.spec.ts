@@ -856,11 +856,16 @@ test.describe('lines, boxes and labels', () => {
     await page.getByRole('tab', { name: 'Extras' }).click();
     await expect(page.getByTestId('unread-count')).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('Text could not be read automatically.')).toBeVisible();
-    expect(await copiedSvg(page)).not.toContain('<text');
+    // until it is typed, the label is kept as the traced letters, not lost
+    const unreadSvg = await copiedSvg(page);
+    expect(unreadSvg).not.toContain('<text');
+    expect(unreadSvg).toContain('(not read)');
     await page.getByTestId('extra-row-text-01').click();
     await page.getByTestId('label-text').fill('18:00');
     await expect(page.getByTestId('unread-count')).toHaveCount(0);
-    expect(await copiedSvg(page)).toMatch(/<text id="Label 01"[^>]*>18:00<\/text>/);
+    const typedSvg = await copiedSvg(page);
+    expect(typedSvg).toMatch(/<text id="Label 01"[^>]*>18:00<\/text>/);
+    expect(typedSvg).not.toContain('(not read)');
   });
 
   test('double-click on empty space adds a label you can type into', async ({ page }) => {
@@ -895,6 +900,33 @@ test.describe('lines, boxes and labels', () => {
     expect(Math.abs(undone!.x - before!.x)).toBeLessThan(1);
     await page.keyboard.press('Delete');
     await expect(page.locator('[data-testid="overlay-lines"] line')).toHaveCount(2);
+  });
+
+  test('third screenshot: 4 candles, no warning, the time label is read and can be edited', async ({
+    page,
+  }) => {
+    await page.goto('/');
+    await page.setInputFiles(
+      'input[type=file]',
+      path.join(__dirname, '..', 'tests', 'fixtures', 'extras-c.png'),
+    );
+    await expect(page.getByTestId('candle-count')).toHaveText('4 candles');
+    await expect(page.getByTestId('unclean-notice')).toHaveCount(0);
+    await expect(page.getByTestId('extras-found')).toContainText('3 lines, 1 box and 1 label');
+    const label = page.locator('[data-testid="overlay-lines"] text');
+    await expect(label).toHaveText('06:00', { timeout: 60_000 });
+    // once it is a text layer, the letters of the screenshot underneath are covered, not doubled
+    await expect(page.locator('[data-testid="text-covers"] rect')).toHaveCount(1);
+    await page.getByTestId('extra-hit-text-01').dblclick();
+    const editor = page.getByTestId('label-editor');
+    await editor.fill('06:15');
+    await editor.press('Enter');
+    await expect(label).toHaveText('06:15');
+    expect(await copiedSvg(page)).toMatch(/<text id="Label 01"[^>]*>06:15<\/text>/);
+    // removing it takes it out of the SVG (and the picture)
+    await page.keyboard.press('Delete');
+    await expect(label).toHaveCount(0);
+    expect(await copiedSvg(page)).not.toContain('<text');
   });
 
   test('a chart with only candles shows no extras', async ({ page }) => {

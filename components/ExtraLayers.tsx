@@ -51,20 +51,24 @@ export function ExtraShapes({ extras, layer }: { extras: Extra[]; layer: 'below'
           strokeDasharray={l.dash ? `${l.dash[0]} ${l.dash[1]}` : undefined}
         />
       ))}
-      {texts.map((t) => (
-        <text
-          key={t.id}
-          data-extra={t.id}
-          x={t.x}
-          y={t.y}
-          fontFamily={LABEL_FONT}
-          fontSize={t.size}
-          fill={t.color}
-          style={{ whiteSpace: 'pre' }}
-        >
-          {t.text}
-        </text>
-      ))}
+      {texts.map((t) =>
+        t.text.trim() === '' && t.trace ? (
+          <path key={t.id} data-extra={t.id} d={t.trace} fill={t.color} />
+        ) : (
+          <text
+            key={t.id}
+            data-extra={t.id}
+            x={t.x}
+            y={t.y}
+            fontFamily={LABEL_FONT}
+            fontSize={t.size}
+            fill={t.color}
+            style={{ whiteSpace: 'pre' }}
+          >
+            {t.text}
+          </text>
+        ),
+      )}
     </g>
   );
 }
