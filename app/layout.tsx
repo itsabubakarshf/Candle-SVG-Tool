@@ -14,8 +14,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Candle SVG Tool',
-  description: 'Turn a TradingView candle screenshot into a clean, Figma-ready SVG.',
+  title: 'Crisper',
+  description: 'Turn a TradingView candle screenshot into crisp, resizable, Figma-ready vectors.',
 };
 
 export default function RootLayout({ children }: LayoutProps<'/'>) {

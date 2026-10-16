@@ -1,4 +1,4 @@
-# Candle SVG Tool
+# Crisper
 
 Turns a cropped TradingView candle screenshot into a clean, resizable, Figma-ready SVG that
 keeps every candle's exact position, size and spacing.
