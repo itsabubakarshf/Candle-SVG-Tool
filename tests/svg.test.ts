@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Candle } from '@/lib/detect/types';
-import { ABBI_DARK, ABBI_LIGHT } from '@/lib/presets/builtins';
+import { DARK_PRESET, LIGHT_PRESET } from '@/lib/presets/builtins';
 import { buildSvg, fmt } from '@/lib/svg/buildSvg';
 import { normalizeHex } from '@/lib/svg/hex';
 
@@ -24,7 +24,7 @@ function candle(patch: Partial<Candle> = {}): Candle {
 const SIZE = { width: 282, height: 547 };
 
 describe('buildSvg structure', () => {
-  const svg = buildSvg([candle()], ABBI_LIGHT, SIZE);
+  const svg = buildSvg([candle()], LIGHT_PRESET, SIZE);
 
   it('matches the example in the spec for one bull candle', () => {
     expect(svg).toContain('<g id="Candle 01">');
@@ -78,7 +78,7 @@ describe('buildSvg structure', () => {
 
 describe('buildSvg details', () => {
   it('insets the body by half the border width so the outer edge stays put', () => {
-    const preset = { ...ABBI_LIGHT, borderWidth: 4 };
+    const preset = { ...LIGHT_PRESET, borderWidth: 4 };
     const svg = buildSvg(
       [candle({ bodyLeft: 10, bodyRight: 40, bodyTop: 20, bodyBottom: 80 })],
       preset,
@@ -89,23 +89,23 @@ describe('buildSvg details', () => {
   });
 
   it('draws two wick segments, never a line through the body', () => {
-    const svg = buildSvg([candle()], ABBI_LIGHT, SIZE);
+    const svg = buildSvg([candle()], LIGHT_PRESET, SIZE);
     expect((svg.match(/<line /g) ?? []).length).toBe(2);
   });
 
   it('omits a wick that is absent', () => {
-    const svg = buildSvg([candle({ wickTop: null })], ABBI_LIGHT, SIZE);
+    const svg = buildSvg([candle({ wickTop: null })], LIGHT_PRESET, SIZE);
     expect(svg).not.toContain('Upper wick');
     expect(svg).toContain('Lower wick');
-    expect(buildSvg([candle({ wickTop: null, wickBottom: null })], ABBI_LIGHT, SIZE)).not.toContain(
-      '<line',
-    );
+    expect(
+      buildSvg([candle({ wickTop: null, wickBottom: null })], LIGHT_PRESET, SIZE),
+    ).not.toContain('<line');
   });
 
   it('draws a flat candle as a solid bar as thick as the border', () => {
     const svg = buildSvg(
       [candle({ isDoji: true, bodyTop: 50, bodyBottom: 51, wickTop: 20, wickBottom: 90 })],
-      { ...ABBI_LIGHT, borderWidth: 2 },
+      { ...LIGHT_PRESET, borderWidth: 2 },
       SIZE,
     );
     expect(svg).toContain(
@@ -130,7 +130,7 @@ describe('buildSvg details', () => {
         candle({ id: 'r', centerX: 90, bodyLeft: 77, bodyRight: 103, type: 'bear' }),
         candle({ id: 'l' }),
       ],
-      ABBI_LIGHT,
+      LIGHT_PRESET,
       SIZE,
     );
     expect(svg.indexOf('Candle 01')).toBeLessThan(svg.indexOf('Candle 02'));
@@ -140,9 +140,9 @@ describe('buildSvg details', () => {
   });
 
   it('uses the preset colours for bear candles and for another preset', () => {
-    const bear = buildSvg([candle({ type: 'bear' })], ABBI_LIGHT, SIZE);
+    const bear = buildSvg([candle({ type: 'bear' })], LIGHT_PRESET, SIZE);
     expect(bear).toContain('fill="#2B2F36" stroke="#2B2F36"');
-    const dark = buildSvg([candle()], ABBI_DARK, SIZE);
+    const dark = buildSvg([candle()], DARK_PRESET, SIZE);
     expect(dark).toContain('fill="#14161A" stroke="#E6E8EC"');
   });
 
@@ -152,7 +152,7 @@ describe('buildSvg details', () => {
         candle({ colorOverride: { body: '#FF0000', wick: '#00FF00' } }),
         candle({ id: 'b', centerX: 100, bodyLeft: 87, bodyRight: 113 }),
       ],
-      ABBI_LIGHT,
+      LIGHT_PRESET,
       SIZE,
     );
     const [first, second] = svg.split('<g id="Candle 02">') as [string, string];
@@ -163,21 +163,21 @@ describe('buildSvg details', () => {
   });
 
   it('is transparent by default and adds a named Background rect on request', () => {
-    expect(buildSvg([candle()], ABBI_LIGHT, SIZE)).not.toContain('Background');
-    const withBg = buildSvg([candle()], { ...ABBI_LIGHT, background: '#101010' }, SIZE, {
+    expect(buildSvg([candle()], LIGHT_PRESET, SIZE)).not.toContain('Background');
+    const withBg = buildSvg([candle()], { ...LIGHT_PRESET, background: '#101010' }, SIZE, {
       background: true,
     });
     expect(withBg).toContain(
       '<rect id="Background" x="0" y="0" width="282" height="547" fill="#101010"/>',
     );
     expect(withBg.indexOf('Background')).toBeLessThan(withBg.indexOf('Candle 01'));
-    expect(buildSvg([candle()], ABBI_LIGHT, SIZE, { background: true })).toContain(
+    expect(buildSvg([candle()], LIGHT_PRESET, SIZE, { background: true })).toContain(
       'fill="#FFFFFF"/>',
     );
   });
 
   it('produces an empty but valid svg for no candles', () => {
-    expect(buildSvg([], ABBI_LIGHT, SIZE)).toBe(
+    expect(buildSvg([], LIGHT_PRESET, SIZE)).toBe(
       '<svg xmlns="http://www.w3.org/2000/svg" width="282" height="547" viewBox="0 0 282 547">\n</svg>',
     );
   });

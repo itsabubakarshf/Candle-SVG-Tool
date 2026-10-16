@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ABBI_DARK, ABBI_LIGHT, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
+import { DARK_PRESET, LIGHT_PRESET, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
 import {
   ACTIVE_KEY,
   PRESETS_KEY,
@@ -37,7 +37,7 @@ const broken: KeyValueStorage = {
 };
 
 const custom: Preset = {
-  ...ABBI_LIGHT,
+  ...LIGHT_PRESET,
   id: 'preset-1',
   name: 'Mine',
   builtIn: false,
@@ -47,14 +47,14 @@ const custom: Preset = {
 };
 
 describe('built-in presets', () => {
-  it('ship "Abbi Light" with the default values from the spec, and a dark mirror', () => {
-    expect(ABBI_LIGHT.name).toBe('Abbi Light');
-    expect(ABBI_LIGHT.bull).toEqual({ body: '#FFFFFF', border: '#2B2F36', wick: '#2B2F36' });
-    expect(ABBI_LIGHT.bear).toEqual({ body: '#2B2F36', border: '#2B2F36', wick: '#2B2F36' });
-    expect(ABBI_LIGHT.borderWidth).toBe(1);
-    expect(ABBI_LIGHT.wickWidth).toBe(1);
-    expect(ABBI_LIGHT.background).toBeNull();
-    expect(ABBI_DARK.name).toBe('Abbi Dark');
+  it('ship "Light" with the default values from the spec, and a dark mirror', () => {
+    expect(LIGHT_PRESET.name).toBe('Light');
+    expect(LIGHT_PRESET.bull).toEqual({ body: '#FFFFFF', border: '#2B2F36', wick: '#2B2F36' });
+    expect(LIGHT_PRESET.bear).toEqual({ body: '#2B2F36', border: '#2B2F36', wick: '#2B2F36' });
+    expect(LIGHT_PRESET.borderWidth).toBe(1);
+    expect(LIGHT_PRESET.wickWidth).toBe(1);
+    expect(LIGHT_PRESET.background).toBeNull();
+    expect(DARK_PRESET.name).toBe('Dark');
     expect(BUILT_IN_PRESETS.every((p) => p.builtIn)).toBe(true);
   });
 });
@@ -62,7 +62,7 @@ describe('built-in presets', () => {
 describe('persistence (FR-13)', () => {
   it('saves and loads user presets and the active id', () => {
     const s = fakeStorage();
-    expect(saveUserPresets([ABBI_LIGHT, custom], s)).toBe(true);
+    expect(saveUserPresets([LIGHT_PRESET, custom], s)).toBe(true);
     expect(loadUserPresets(s)).toEqual([custom]); // built-ins are never stored
     expect(saveActiveId('preset-1', s)).toBe(true);
     expect(loadActiveId(s)).toBe('preset-1');
@@ -120,7 +120,7 @@ describe('parsePreset', () => {
 
 describe('backup file (FR-14)', () => {
   it('round-trips through export and import', () => {
-    const text = exportPresetsJson([ABBI_LIGHT, custom]);
+    const text = exportPresetsJson([LIGHT_PRESET, custom]);
     const parsed = parseImportedPresets(text);
     expect(parsed?.presets).toEqual([custom]);
     expect(parsed?.skipped).toBe(0);

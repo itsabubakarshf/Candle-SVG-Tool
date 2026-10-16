@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ABBI_LIGHT, ABBI_LIGHT_ID, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
+import { LIGHT_PRESET, LIGHT_ID, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
 import {
   exportPresetsJson,
   loadActiveId,
@@ -60,7 +60,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
 
   return {
     presets: initialPresets(),
-    activeId: ABBI_LIGHT_ID,
+    activeId: LIGHT_ID,
     draft: null,
     hydrated: false,
     storageOk: true,
@@ -69,7 +69,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
       const user = loadUserPresets();
       const presets = [...BUILT_IN_PRESETS, ...user];
       const saved = loadActiveId();
-      const activeId = saved && presets.some((p) => p.id === saved) ? saved : ABBI_LIGHT_ID;
+      const activeId = saved && presets.some((p) => p.id === saved) ? saved : LIGHT_ID;
       set({ presets, activeId, draft: null, hydrated: true });
     },
 
@@ -81,7 +81,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
 
     editDraft: (patch) => {
       const { presets, activeId, draft } = get();
-      const base = draft ?? presets.find((p) => p.id === activeId) ?? ABBI_LIGHT;
+      const base = draft ?? presets.find((p) => p.id === activeId) ?? LIGHT_PRESET;
       set({ draft: { ...base, ...patch, id: base.id, builtIn: base.builtIn } });
     },
     discardDraft: () => set({ draft: null }),
@@ -92,8 +92,10 @@ export const usePresetStore = create<PresetState>((set, get) => {
       let saved: Preset;
       let next: Preset[];
       if (draft.builtIn) {
+        // A built-in saved without renaming becomes "<name> copy"; a renamed one keeps its name.
+        const original = presets.find((p) => p.id === draft.id);
         const name = uniqueName(
-          draft.name === ABBI_LIGHT.name ? `${draft.name} copy` : draft.name,
+          draft.name === original?.name ? `${draft.name} copy` : draft.name,
           presets,
         );
         saved = { ...draft, id: newPresetId(), builtIn: false, name };
@@ -110,7 +112,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
 
     newPreset: () => {
       const { presets } = get();
-      const base = presets.find((p) => p.id === get().activeId) ?? ABBI_LIGHT;
+      const base = presets.find((p) => p.id === get().activeId) ?? LIGHT_PRESET;
       const created: Preset = {
         ...base,
         id: newPresetId(),
@@ -146,7 +148,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
       const target = presets.find((p) => p.id === id);
       if (!target || target.builtIn) return false; // built-ins cannot be deleted
       const next = presets.filter((p) => p.id !== id);
-      const nextActive = activeId === id ? ABBI_LIGHT_ID : activeId;
+      const nextActive = activeId === id ? LIGHT_ID : activeId;
       set({ presets: next, activeId: nextActive, draft: null });
       persist(next, nextActive);
       return true;
@@ -195,5 +197,5 @@ export const usePresetStore = create<PresetState>((set, get) => {
 
 /** The preset to draw with: unsaved edits win so the preview is live. */
 export function selectActivePreset(s: PresetState): Preset {
-  return s.draft ?? s.presets.find((p) => p.id === s.activeId) ?? ABBI_LIGHT;
+  return s.draft ?? s.presets.find((p) => p.id === s.activeId) ?? LIGHT_PRESET;
 }

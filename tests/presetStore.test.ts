@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ACTIVE_KEY, PRESETS_KEY, loadUserPresets } from '@/lib/presets/storage';
-import { ABBI_DARK_ID, ABBI_LIGHT_ID, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
+import { DARK_ID, LIGHT_ID, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
 import { selectActivePreset, usePresetStore } from '@/store/presetStore';
 
 const data: Record<string, string> = {};
@@ -17,7 +17,7 @@ const s = () => usePresetStore.getState();
 function reload() {
   usePresetStore.setState({
     presets: [...BUILT_IN_PRESETS],
-    activeId: ABBI_LIGHT_ID,
+    activeId: LIGHT_ID,
     draft: null,
     hydrated: false,
     storageOk: true,
@@ -34,9 +34,9 @@ afterEach(() => {
 });
 
 describe('preset store', () => {
-  it('starts with both built-ins and Abbi Light active', () => {
-    expect(s().presets.map((p) => p.name)).toEqual(['Abbi Light', 'Abbi Dark']);
-    expect(selectActivePreset(s()).id).toBe(ABBI_LIGHT_ID);
+  it('starts with both built-ins and Light active', () => {
+    expect(s().presets.map((p) => p.name)).toEqual(['Light', 'Dark']);
+    expect(selectActivePreset(s()).id).toBe(LIGHT_ID);
   });
 
   it('shows draft edits live without saving them', () => {
@@ -51,10 +51,19 @@ describe('preset store', () => {
     s().editDraft({ bull: { body: '#112233', border: '#112233', wick: '#112233' } });
     const saved = s().saveDraft()!;
     expect(saved.builtIn).toBe(false);
-    expect(saved.id).not.toBe(ABBI_LIGHT_ID);
-    expect(saved.name).toBe('Abbi Light copy');
-    expect(s().presets.find((p) => p.id === ABBI_LIGHT_ID)!.bull.body).toBe('#FFFFFF');
+    expect(saved.id).not.toBe(LIGHT_ID);
+    expect(saved.name).toBe('Light copy');
+    expect(s().presets.find((p) => p.id === LIGHT_ID)!.bull.body).toBe('#FFFFFF');
     expect(s().activeId).toBe(saved.id);
+  });
+
+  it('a built-in saved under a new name keeps that name; Dark becomes "Dark copy"', () => {
+    s().setActive(DARK_ID);
+    s().editDraft({ borderWidth: 2 });
+    expect(s().saveDraft()!.name).toBe('Dark copy');
+    s().setActive(LIGHT_ID);
+    s().editDraft({ name: 'Mine' });
+    expect(s().saveDraft()!.name).toBe('Mine');
   });
 
   it('creates, duplicates, renames and deletes user presets', () => {
@@ -69,8 +78,8 @@ describe('preset store', () => {
   });
 
   it('cannot delete built-in presets', () => {
-    expect(s().remove(ABBI_LIGHT_ID)).toBe(false);
-    expect(s().remove(ABBI_DARK_ID)).toBe(false);
+    expect(s().remove(LIGHT_ID)).toBe(false);
+    expect(s().remove(DARK_ID)).toBe(false);
     expect(s().presets.length).toBe(2);
   });
 
@@ -80,11 +89,11 @@ describe('preset store', () => {
     expect(a.name).not.toBe(b.name);
   });
 
-  it('deleting the active preset falls back to Abbi Light', () => {
+  it('deleting the active preset falls back to Light', () => {
     const p = s().newPreset();
     expect(s().activeId).toBe(p.id);
     s().remove(p.id);
-    expect(s().activeId).toBe(ABBI_LIGHT_ID);
+    expect(s().activeId).toBe(LIGHT_ID);
   });
 });
 
@@ -95,7 +104,7 @@ describe('AC-5: saved presets and the active preset survive a reload', () => {
     expect(data[ACTIVE_KEY]).toBe(saved.id);
 
     reload(); // simulate a fresh page: store starts from defaults
-    expect(s().activeId).toBe(ABBI_LIGHT_ID);
+    expect(s().activeId).toBe(LIGHT_ID);
     s().hydrate();
     expect(s().activeId).toBe(saved.id);
     expect(selectActivePreset(s()).name).toBe('Mine');
@@ -104,10 +113,10 @@ describe('AC-5: saved presets and the active preset survive a reload', () => {
   });
 
   it('remembers switching to a built-in too', () => {
-    s().setActive(ABBI_DARK_ID);
+    s().setActive(DARK_ID);
     reload();
     s().hydrate();
-    expect(s().activeId).toBe(ABBI_DARK_ID);
+    expect(s().activeId).toBe(DARK_ID);
   });
 
   it('loads the built-ins when storage is empty, corrupt or missing', () => {
@@ -115,7 +124,7 @@ describe('AC-5: saved presets and the active preset survive a reload', () => {
     data[ACTIVE_KEY] = 'does-not-exist';
     s().hydrate();
     expect(s().presets.length).toBe(2);
-    expect(s().activeId).toBe(ABBI_LIGHT_ID);
+    expect(s().activeId).toBe(LIGHT_ID);
     delete (globalThis as { window?: unknown }).window;
     expect(() => s().hydrate()).not.toThrow();
   });
