@@ -26,12 +26,21 @@ const FIELDS = [
  * Compares detected candles with ground truth and records the worst error per field.
  * Structure (count, type, missing wicks, doji flag) must match exactly.
  */
-export function compare(label: string, detected: Candle[], truth: TruthCandle[], tol: number) {
+export function compare(
+  label: string,
+  detected: Candle[],
+  truth: TruthCandle[],
+  tol: number,
+  opts: { skipDojiType?: boolean } = {},
+) {
   expect(detected.length, `${label}: candle count`).toBe(truth.length);
   const fields: Record<string, number> = {};
   detected.forEach((d, i) => {
     const t = truth[i] as TruthCandle;
-    expect(d.type, `${label}: candle ${i + 1} type`).toBe(t.type);
+    // A flat hollow candle is a plain line, so bull and bear look identical in a neutral style.
+    if (!(opts.skipDojiType && t.isDoji)) {
+      expect(d.type, `${label}: candle ${i + 1} type`).toBe(t.type);
+    }
     expect(d.isDoji, `${label}: candle ${i + 1} doji`).toBe(t.isDoji);
     for (const f of FIELDS) {
       const dv = d[f];

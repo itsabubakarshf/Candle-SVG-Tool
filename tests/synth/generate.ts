@@ -289,7 +289,9 @@ export function layout(
   opts: { style: SynthStyle; pitch: number; margin?: number; height: number; startX?: number },
 ): SynthChart {
   const margin = opts.margin ?? 12;
-  const startX = opts.startX ?? margin + (specs[0]?.bodyWidth ?? 0) / 2;
+  // Real renderers snap 1 px lines to whole pixels. Put the first centre on a pixel centre
+  // (x.5) so a 1 px wick is crisp, as in a real screenshot.
+  const startX = opts.startX ?? Math.floor(margin + (specs[0]?.bodyWidth ?? 0) / 2) + 0.5;
   const candles = specs.map((s, i) => ({ ...s, centerX: startX + i * opts.pitch }));
   const last = candles[candles.length - 1];
   const width = Math.ceil((last ? last.centerX + last.bodyWidth / 2 : 0) + margin);
