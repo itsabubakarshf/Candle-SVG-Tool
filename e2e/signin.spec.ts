@@ -25,7 +25,7 @@ interface Fake {
   authCalls: string[];
 }
 
-async function fakeDatabase(page: Page): Promise<Fake> {
+async function fakeDatabase(page: Page, opts: { google?: boolean } = {}): Promise<Fake> {
   const fake: Fake = { writes: [], authCalls: [] };
   await page.route(`${DB}/rest/v1/presets**`, async (route) => {
     const r = route.request();
@@ -39,6 +39,18 @@ async function fakeDatabase(page: Page): Promise<Fake> {
   await page.route(`${DB}/auth/v1/**`, async (route) => {
     const url = new URL(route.request().url());
     fake.authCalls.push(url.pathname);
+    if (url.pathname.endsWith('/authorize') && opts.google === false) {
+      await route.fulfill({
+        status: 400,
+        headers: { 'access-control-allow-origin': '*' },
+        json: {
+          code: 400,
+          error_code: 'validation_failed',
+          msg: 'Unsupported provider: provider is not enabled',
+        },
+      });
+      return;
+    }
     if (url.pathname.endsWith('/authorize')) {
       await route.fulfill({ contentType: 'text/html', body: '<p>google</p>' });
       return;
@@ -130,6 +142,22 @@ test.describe('saving presets needs an account', () => {
     const nav = page.waitForRequest((r) => r.url().includes('/auth/v1/authorize'));
     await page.getByRole('button', { name: 'Continue with Google' }).click();
     expect((await nav).url()).toContain('provider=google');
+  });
+
+  test('when Google is not switched on, the visitor sees a message, not an error page', async ({
+    page,
+  }) => {
+    await fakeDatabase(page, { google: false });
+    await openColors(page);
+    await page
+      .getByRole('button', { name: 'Sign in', exact: true })
+      .filter({ visible: true })
+      .click();
+    await page.getByRole('button', { name: 'Continue with Google' }).click();
+    const dialog = page.getByRole('dialog');
+    await expect(dialog.getByRole('alert')).toContainText('Google sign-in is not available yet');
+    await expect(dialog).toBeVisible();
+    expect(page.url()).not.toContain('supabase');
   });
 
   test('a signed-in account saves its own preset, and only that is uploaded', async ({ page }) => {

@@ -74,16 +74,30 @@ export function watchAccount(callback: (account: Account | null) => void): () =>
 
 const returnUrl = () => (typeof window === 'undefined' ? undefined : window.location.origin);
 
-/** Opens Google's sign-in. The page leaves and comes back signed in. */
+/**
+ * Opens Google's sign-in. The page leaves and comes back signed in. The address is checked
+ * first: when Google is not switched on for the project the server answers with an error page,
+ * and the visitor should see a message here instead of that page.
+ */
 export async function signInWithGoogle(): Promise<string | null> {
   const c = getClient();
   if (!c) return 'Sign-in is not available right now.';
+  const unavailable = 'Google sign-in is not available yet. Use the email link instead.';
   try {
-    const { error } = await c.auth.signInWithOAuth({
+    const { data, error } = await c.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo: returnUrl() },
+      options: { redirectTo: returnUrl(), skipBrowserRedirect: true },
     });
-    return error ? 'Google sign-in is not available yet. Try the email link instead.' : null;
+    if (error || !data.url) return unavailable;
+    try {
+      const probe = await fetch(data.url, { redirect: 'manual' });
+      // A working provider answers with a redirect to Google (opaque to the page).
+      if (probe.type !== 'opaqueredirect' && !probe.ok) return unavailable;
+    } catch {
+      /* the check itself was blocked (CORS, offline): go ahead and let the browser try */
+    }
+    window.location.assign(data.url);
+    return null;
   } catch {
     return 'Could not reach the sign-in service. Check your connection and try again.';
   }

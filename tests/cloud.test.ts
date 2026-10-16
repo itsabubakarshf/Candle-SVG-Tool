@@ -1,5 +1,5 @@
 import type { Session, SupabaseClient } from '@supabase/supabase-js';
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { LIGHT_PRESET, MO_PRESET } from '@/lib/presets/builtins';
 import {
   accountOf,
@@ -8,6 +8,7 @@ import {
   pullPresets,
   pushPresets,
   setCloudClient,
+  signInWithGoogle,
   stashPending,
   takePending,
   type Account,
@@ -154,5 +155,53 @@ describe('a preset waiting for sign-in', () => {
     stashPending(mine('p', 'Waiting'));
     expect(takePending()?.name).toBe('Waiting');
     expect(takePending()).toBeNull();
+  });
+});
+
+describe('Google sign-in', () => {
+  const oauth = (url: string | null, error: object | null = null) =>
+    ({
+      auth: { signInWithOAuth: async () => ({ data: { url }, error }) },
+    }) as unknown as SupabaseClient;
+  let assigned: string | null;
+  beforeEach(() => {
+    assigned = null;
+    vi.stubGlobal('window', {
+      location: {
+        origin: 'https://app.test',
+        assign: (u: string) => {
+          assigned = u;
+        },
+      },
+    });
+  });
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('sends the visitor to Google when the provider answers with a redirect', async () => {
+    setCloudClient(oauth('https://db.test/auth/v1/authorize?provider=google'));
+    vi.stubGlobal('fetch', async () => ({ type: 'opaqueredirect', ok: false }));
+    expect(await signInWithGoogle()).toBeNull();
+    expect(assigned).toContain('provider=google');
+  });
+
+  it('shows a message, and does not leave the page, when Google is not switched on', async () => {
+    setCloudClient(oauth('https://db.test/auth/v1/authorize?provider=google'));
+    vi.stubGlobal('fetch', async () => ({ type: 'cors', ok: false, status: 400 }));
+    expect(await signInWithGoogle()).toMatch(/not available yet/);
+    expect(assigned).toBeNull();
+  });
+
+  it('still tries when the check itself cannot run', async () => {
+    setCloudClient(oauth('https://db.test/auth/v1/authorize?provider=google'));
+    vi.stubGlobal('fetch', async () => {
+      throw new TypeError('blocked');
+    });
+    expect(await signInWithGoogle()).toBeNull();
+    expect(assigned).not.toBeNull();
+  });
+
+  it('reports a failed request for the sign-in address', async () => {
+    setCloudClient(oauth(null, { message: 'nope' }));
+    expect(await signInWithGoogle()).toMatch(/not available yet/);
   });
 });
