@@ -2,7 +2,8 @@ import { deltaE, rgbToLab, type Rgb } from '@/lib/color/lab';
 import { rgbToHex } from '@/lib/svg/hex';
 import { median, measureCluster, type Measured } from './measure';
 import { findBackground } from './background';
-import { classifyCandles, sampleInterior } from './classify';
+import { sampleInterior } from './classify';
+import { decideUp, groupCandles } from './direction';
 import { checkClean, stripLongLines } from './clean';
 import { findExtras, withoutFootprint, withoutFootprintDe } from './extras';
 import { confidenceScore } from './confidence';
@@ -13,13 +14,14 @@ import {
   type Candle,
   type CandleColors,
   type DetectSettings,
+  type Direction,
   type DetectionResult,
   type PixelImage,
   type SourceStyle,
 } from './types';
 
 export { DEFAULT_SETTINGS, LOW_CONFIDENCE } from './types';
-export type { Candle, DetectSettings, DetectionResult, PixelImage } from './types';
+export type { Candle, DetectSettings, DetectionResult, Direction, PixelImage } from './types';
 
 /**
  * Finds every candle in the image and measures it. Pure function: no DOM, no React.
@@ -181,7 +183,12 @@ export function detect(
 
   const medianWidth = median(measured.map((m) => m.bodyRight - m.bodyLeft));
   const samples = measured.map((m) => sampleInterior(image, m, background));
-  const { types, unclear } = classifyCandles(samples, background, settings);
+  const grouping = groupCandles(samples, measured);
+  const decision = decideUp(grouping, measured, settings, background);
+  const types: Candle['type'][] = grouping.group.map((g) =>
+    g === decision.upGroup ? 'bull' : 'bear',
+  );
+  const unclear = grouping.unclear;
 
   // The candles' own colours. A flat or tiny body has no interior, so its fill is its border.
   const own: Rgb3[] = measured.map((m, i) => {
@@ -239,6 +246,7 @@ export function detect(
       wickTop: m.wickTop,
       wickBottom: m.wickBottom,
       type: types[i] as Candle['type'],
+      group: grouping.group[i] as number,
       isDoji: m.isDoji,
       confidence,
       ...(differs ? { sourceColors: toHex(mine) } : {}),
@@ -256,9 +264,23 @@ export function detect(
     wickWidth: snapWidth(sourceWickWidth ?? sourceBorderWidth ?? 1),
     background: rgbToHex(background),
   };
+  const groupColours = (k: number): CandleColors | null => {
+    const members = own.filter((_, i) => grouping.group[i] === k);
+    if (members.length === 0) return null;
+    const med = (key: keyof Rgb3): Rgb =>
+      [0, 1, 2].map((c) => median(members.map((x) => x[key][c] as number))) as Rgb;
+    return toHex({ body: med('body'), border: med('border'), wick: med('wick') });
+  };
+  const direction: Direction = {
+    groups: [0, 1].map((k) => ({ colours: groupColours(k), count: grouping.counts[k] as number })),
+    upGroup: decision.upGroup,
+    source: decision.source,
+    sure: decision.sure,
+  };
   return {
     candles,
     background,
+    direction,
     medianBodyWidth: medianWidth,
     sourceBorderWidth,
     sourceWickWidth,

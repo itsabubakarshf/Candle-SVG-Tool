@@ -321,7 +321,8 @@ export function randomChart(
       bodyBottom: bottom,
       wickTop: rnd() < 0.9 ? top - 4 - rnd() * 40 : null,
       wickBottom: rnd() < 0.9 ? bottom + 4 + rnd() * 40 : null,
-      type: close >= open ? 'bull' : 'bear',
+      // y grows downwards: a rising candle closes higher up the picture than it opened
+      type: close <= open ? 'bull' : 'bear',
     });
   }
   return layout(specs, { style, pitch, height: 600 });

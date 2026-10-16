@@ -173,7 +173,10 @@ describe('a clean chart is never flagged (whatever its colours or quality)', () 
     const flagged: string[] = [];
     let n = 0;
     for (let seed = 1; seed <= 15; seed++) {
-      const style = styles[seed % styles.length] as SynthStyle;
+      const base = styles[seed % styles.length] as SynthStyle;
+      // randomChart now draws a rising candle as bull (it used to be the other way round);
+      // swapping the colours keeps these charts, and so this check, exactly as they were.
+      const style: SynthStyle = { ...base, bull: base.bear, bear: base.bull };
       const bodyWidth = [6, 9, 14, 20, 31][seed % 5] as number;
       const pitch = bodyWidth + [0, 1, 2, 4, 9][seed % 5]!;
       const chart = randomChart(10 + (seed % 30), seed, style, bodyWidth, pitch);

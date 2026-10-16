@@ -24,6 +24,8 @@ export interface Candle {
   /** null = no lower wick */
   wickBottom: number | null;
   type: CandleType;
+  /** Which of the chart's (at most two) colour groups this candle belongs to. */
+  group?: number;
   isDoji: boolean;
   /** 0..1. Below 0.7 is flagged for review. */
   confidence: number;
@@ -132,6 +134,17 @@ export interface TextExtra {
 
 export type Extra = LineExtra | BoxExtra | TextExtra;
 
+/** How bull and bear were told apart: which colour group means "rising". */
+export interface Direction {
+  /** The two colour groups. colours is null when a group has no candles. */
+  groups: Array<{ colours: CandleColors | null; count: number }>;
+  /** The group that was judged to be rising. */
+  upGroup: 0 | 1;
+  source: 'structure' | 'colour' | 'prior' | 'remembered' | 'user';
+  /** False when the chart gave no real answer: the person should be asked. */
+  sure: boolean;
+}
+
 export interface DetectionResult {
   candles: Candle[];
   background: Rgb;
@@ -142,6 +155,8 @@ export interface DetectionResult {
   /** Measured wick thickness, in source pixels. */
   sourceWickWidth: number | null;
   sourceStyle: SourceStyle;
+  /** Which colour is rising and how that was decided. */
+  direction?: Direction;
   /** Lines, boxes and labels found next to the candles. */
   extras: Extra[];
   /** Whether the image holds only candles. Lines, shapes or text make it "not clean". */
