@@ -39,7 +39,7 @@ describe('preset store', () => {
   beforeEach(() => s().setActive(LIGHT_ID)); // these tests edit the Light preset
 
   it('starts with both built-ins', () => {
-    expect(s().presets.map((p) => p.name)).toEqual(['Light', 'Dark']);
+    expect(s().presets.map((p) => p.name)).toEqual(['Light', 'Dark', 'Mo']);
     expect(selectActivePreset(s()).id).toBe(LIGHT_ID); // active in this block
   });
 
@@ -84,7 +84,7 @@ describe('preset store', () => {
   it('cannot delete built-in presets', () => {
     expect(s().remove(LIGHT_ID)).toBe(false);
     expect(s().remove(DARK_ID)).toBe(false);
-    expect(s().presets.length).toBe(2);
+    expect(s().presets.length).toBe(3);
   });
 
   it('keeps names unique', () => {
@@ -115,7 +115,7 @@ describe('AC-5: saved presets and the active preset survive a reload', () => {
     expect(s().activeId).toBe(saved.id);
     expect(selectActivePreset(s()).name).toBe('Mine');
     expect(selectActivePreset(s()).borderWidth).toBe(2);
-    expect(s().presets.length).toBe(3);
+    expect(s().presets.length).toBe(4);
   });
 
   it('remembers switching to a built-in too', () => {
@@ -129,7 +129,7 @@ describe('AC-5: saved presets and the active preset survive a reload', () => {
     data[PRESETS_KEY] = '{{{';
     data[ACTIVE_KEY] = 'does-not-exist';
     s().hydrate();
-    expect(s().presets.length).toBe(2);
+    expect(s().presets.length).toBe(3);
     expect(s().activeId).toBe(ORIGINAL_ID);
     delete (globalThis as { window?: unknown }).window;
     expect(() => s().hydrate()).not.toThrow();

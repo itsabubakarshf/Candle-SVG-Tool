@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DARK_PRESET, LIGHT_PRESET, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
+import { DARK_PRESET, LIGHT_PRESET, MO_PRESET, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
 import {
   ACTIVE_KEY,
   PRESETS_KEY,
@@ -56,6 +56,12 @@ describe('built-in presets', () => {
     expect(LIGHT_PRESET.background).toBeNull();
     expect(DARK_PRESET.name).toBe('Dark');
     expect(BUILT_IN_PRESETS.every((p) => p.builtIn)).toBe(true);
+  });
+
+  it('has the Mo preset with its grey colours', () => {
+    expect(MO_PRESET.name).toBe('Mo');
+    expect(MO_PRESET.bull).toEqual({ body: '#F4F4F4', border: '#B0B0B0', wick: '#B0B0B0' });
+    expect(MO_PRESET.bear).toEqual({ body: '#3A3A3A', border: '#4A4A4A', wick: '#4A4A4A' });
   });
 });
 

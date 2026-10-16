@@ -7,6 +7,7 @@ export const ORIGINAL_NAME = 'Original colors';
 
 export const LIGHT_ID = 'builtin-abbi-light';
 export const DARK_ID = 'builtin-abbi-dark';
+export const MO_ID = 'builtin-mo';
 
 export const LIGHT_PRESET: Preset = {
   schemaVersion: PRESET_SCHEMA_VERSION,
@@ -33,4 +34,17 @@ export const DARK_PRESET: Preset = {
   background: null,
 };
 
-export const BUILT_IN_PRESETS: Preset[] = [LIGHT_PRESET, DARK_PRESET];
+/** Soft grey bull on a dark-grey bear. */
+export const MO_PRESET: Preset = {
+  schemaVersion: PRESET_SCHEMA_VERSION,
+  id: MO_ID,
+  name: 'Mo',
+  builtIn: true,
+  bull: { body: '#F4F4F4', border: '#B0B0B0', wick: '#B0B0B0' },
+  bear: { body: '#3A3A3A', border: '#4A4A4A', wick: '#4A4A4A' },
+  borderWidth: 1,
+  wickWidth: 1,
+  background: null,
+};
+
+export const BUILT_IN_PRESETS: Preset[] = [LIGHT_PRESET, DARK_PRESET, MO_PRESET];
