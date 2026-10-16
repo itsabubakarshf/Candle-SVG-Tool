@@ -1,5 +1,5 @@
 import fs from 'node:fs';
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 import {
   SAMPLE,
   candleGroups,
@@ -8,9 +8,17 @@ import {
   loadBuffer,
   loadSample,
   pngBuffer,
+  pngOf,
   simpleChart,
 } from './helpers';
-import { HOLLOW_STYLE, layout, renderChart } from '../tests/synth/generate';
+import {
+  HOLLOW_STYLE,
+  copyImage,
+  layout,
+  overlayLine,
+  overlayText,
+  renderChart,
+} from '../tests/synth/generate';
 
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
@@ -741,6 +749,37 @@ test.describe('look and layout (NFR-8)', () => {
       return `${cs.outlineStyle}|${cs.boxShadow}`;
     });
     expect(outline).not.toBe('none|none');
+  });
+});
+
+test.describe('chart cleanliness', () => {
+  const UNCLEAN = 'This chart is not clean';
+  const warnings = (page: Page) => page.locator('[data-sonner-toast]').filter({ hasText: UNCLEAN });
+
+  test('a clean chart gets no warning, whatever its colours', async ({ page }) => {
+    await loadSample(page);
+    await expect(page.getByText('5 candles found').first()).toBeVisible();
+    await expect(warnings(page)).toHaveCount(0);
+    await expect(page.getByTestId('unclean-notice')).toHaveCount(0);
+  });
+
+  test('a chart with a line and price labels gets exactly one warning', async ({ page }) => {
+    const img = copyImage(renderChart(simpleChart([25, 25, 25, 25, 25])).image);
+    overlayLine(img, { x0: 0, y0: 40, x1: img.width, y1: 40, color: [41, 98, 255] });
+    ['4523.5', '4518.0', '4512.5'].forEach((t, i) =>
+      overlayText(img, t, img.width - 40, 20 + i * 70, { color: [120, 128, 140], scale: 2 }),
+    );
+    await loadBuffer(page, pngOf(img));
+    await expect(warnings(page)).toHaveCount(1);
+    await expect(
+      page.getByText('Only candles are allowed', { exact: false }).first(),
+    ).toBeVisible();
+    await expect(page.getByTestId('unclean-notice')).toBeVisible();
+    // Re-detecting the same picture does not nag again.
+    await page.getByRole('button', { name: 'Re-detect' }).click();
+    await expect(warnings(page)).toHaveCount(1);
+    // The candles can still be used.
+    await expect(page.getByRole('button', { name: 'Copy SVG' }).first()).toBeEnabled();
   });
 });
 

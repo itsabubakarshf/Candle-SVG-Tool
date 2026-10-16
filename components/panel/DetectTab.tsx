@@ -4,6 +4,7 @@ import { Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Slider } from '@/components/ui/slider';
 import { Switch } from '@/components/ui/switch';
+import { UNCLEAN_HELP, UNCLEAN_TITLE } from '@/lib/detect/notice';
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
 import { useUiStore } from '@/store/uiStore';
 
@@ -42,6 +43,14 @@ export function DetectTab() {
         {flagged > 0 && (
           <p className="text-sm text-amber-600 dark:text-amber-400" data-testid="flagged-count">
             {flagged} flagged for review (amber dot)
+          </p>
+        )}
+        {result && !result.cleanliness.clean && (
+          <p
+            className="rounded-md border border-amber-500/40 bg-amber-500/10 p-2 text-sm text-amber-700 dark:text-amber-300"
+            data-testid="unclean-notice"
+          >
+            <strong>{UNCLEAN_TITLE}.</strong> {UNCLEAN_HELP}
           </p>
         )}
         {status === 'error' && error && (

@@ -19,6 +19,17 @@ export function pngBuffer(chart: SynthChart): Buffer {
   return PNG.sync.write(png);
 }
 
+/** A PNG of an image that was already rendered (so extras can be drawn on it first). */
+export function pngOf(image: {
+  width: number;
+  height: number;
+  data: Uint8Array | Uint8ClampedArray;
+}): Buffer {
+  const png = new PNG({ width: image.width, height: image.height });
+  png.data = Buffer.from(image.data);
+  return PNG.sync.write(png);
+}
+
 export function simpleChart(widths: number[]): SynthChart {
   const specs: Array<Omit<SynthCandle, 'centerX'>> = widths.map((w, i) => ({
     type: i % 2 ? 'bear' : 'bull',

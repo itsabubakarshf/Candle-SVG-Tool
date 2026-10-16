@@ -13,6 +13,10 @@ Everything runs in the browser. Images and presets never leave your machine.
 4. Press **Copy SVG** and paste into Figma with Ctrl+V. Candles arrive as named vector layers
    (`Candle 01` → `Upper wick`, `Lower wick`, `Body`).
 
+If the screenshot has anything besides candles (a line, a box, price numbers, a watermark), Crisper
+shows one notice: "This chart is not clean". It looks at where things are, never at colours, so
+candles in any colour are fine. The check stays silent when unsure.
+
 In Figma a normal resize keeps wicks and borders thin. The Scale tool (K) scales strokes too.
 
 ## Develop
@@ -32,6 +36,7 @@ The first run of `pnpm e2e` needs a browser: `pnpm exec playwright install chrom
 | Part                                       | Where                                  |
 | ------------------------------------------ | -------------------------------------- |
 | Candle detection (pure TypeScript, no DOM) | `lib/detect/`                          |
+| "Is the chart clean?" check                | `lib/detect/clean.ts`                  |
 | SVG output (pure)                          | `lib/svg/`                             |
 | Detection runs in a Web Worker             | `workers/detect.worker.ts`             |
 | Test charts with known geometry            | `tests/synth/generate.ts`              |
