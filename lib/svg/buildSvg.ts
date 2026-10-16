@@ -1,5 +1,7 @@
-import type { Candle } from '@/lib/detect/types';
+import type { Candle, Extra } from '@/lib/detect/types';
 import type { Preset } from '@/lib/presets/types';
+import { boxesLayer, frontLayers } from './extras';
+import { fmt } from './format';
 import { candleShape } from './geometry';
 
 export interface SvgSize {
@@ -10,13 +12,11 @@ export interface SvgSize {
 export interface BuildSvgOptions {
   /** Add a rect named "Background". Uses the preset's background colour, else white. */
   background?: boolean;
+  /** Lines, boxes and labels found next to the candles. */
+  extras?: Extra[];
 }
 
-/** 2 decimals, no trailing zeros: 40.5, 12.3, 30. */
-export function fmt(n: number): string {
-  const s = (Math.round(n * 100) / 100).toFixed(2);
-  return s.replace(/\.?0+$/, '') || '0';
-}
+export { fmt };
 
 /**
  * Figma-ready SVG: plain shapes, inline attributes, named layers. No <style>, classes,
@@ -38,6 +38,8 @@ export function buildSvg(
       `  <rect id="Background" x="0" y="0" width="${w}" height="${h}" fill="${preset.background ?? '#FFFFFF'}"/>`,
     );
   }
+  const extras = options.extras ?? [];
+  lines.push(...boxesLayer(extras));
   const ordered = [...candles].sort((a, b) => a.centerX - b.centerX);
   ordered.forEach((candle, i) => {
     const s = candleShape(candle, i, preset);
@@ -56,6 +58,7 @@ export function buildSvg(
     );
     lines.push('  </g>');
   });
+  lines.push(...frontLayers(extras));
   lines.push('</svg>');
   return lines.join('\n');
 }

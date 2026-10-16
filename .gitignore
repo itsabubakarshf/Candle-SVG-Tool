@@ -44,3 +44,6 @@ next-env.d.ts
 # playwright
 /test-results/
 /playwright-report/
+
+# text-recognition files copied from node_modules by scripts/copy-ocr-assets.mjs
+/public/ocr/

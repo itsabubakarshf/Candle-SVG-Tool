@@ -6,6 +6,8 @@ import {
   type CandleColors,
   type DetectSettings,
   type DetectionResult,
+  type Extra,
+  type TextExtra,
 } from '@/lib/detect/types';
 import {
   flipType,
@@ -19,6 +21,12 @@ import {
   type EdgeKey,
 } from '@/lib/edit/ops';
 import type { LoadedImage } from '@/lib/image/loadImage';
+
+/** One undo step: the candles and the extras together. */
+interface Snap {
+  candles: Candle[];
+  extras: Extra[];
+}
 
 export type HandleKey = 'bodyTop' | 'bodyBottom' | 'wickTop' | 'wickBottom';
 export type DetectStatus = 'idle' | 'running' | 'done' | 'error';
@@ -35,9 +43,15 @@ interface ChartState {
   result: DetectionResult | null;
   settings: DetectSettings;
   candles: Candle[];
-  past: Candle[][];
-  future: Candle[][];
+  /** Lines, boxes and labels next to the candles. */
+  extras: Extra[];
+  past: Snap[];
+  future: Snap[];
   selectedIds: string[];
+  /** The selected line, box or label (never together with selected candles). */
+  selectedExtraId: string | null;
+  /** The label being typed into on the canvas. */
+  editingExtraId: string | null;
   activeHandle: HandleKey | null;
   /** Source x of the last click on a candle; "Split here" cuts at this x. */
   lastClickX: number | null;
@@ -50,6 +64,17 @@ interface ChartState {
   select: (id: string, additive: boolean, clickX?: number) => void;
   clearSelection: () => void;
   setActiveHandle: (h: HandleKey | null) => void;
+
+  selectExtra: (id: string | null) => void;
+  setEditingExtra: (id: string | null) => void;
+  /** An edit that is one undo step (coalesced per field while typing or dragging a colour). */
+  updateExtra: (id: string, patch: Partial<Extra>, coalesceKey?: string) => void;
+  /** Live change while dragging: wrap in beginEdit / endEdit. */
+  dragExtra: (id: string, patch: Partial<Extra>) => void;
+  deleteExtra: (id: string) => void;
+  addText: (x: number, y: number) => string;
+  /** What OCR read. Not an undo step; never overwrites what the user typed. */
+  applyReadText: (id: string, text: string | null) => void;
 
   undo: () => void;
   redo: () => void;
@@ -75,8 +100,11 @@ let lastCoalesceAt = 0;
 
 export const useChartStore = create<ChartState>((set, get) => {
   /** Applies an edit as one undo step. */
-  const commit = (next: Candle[], coalesceKey?: string) => {
-    const { candles, past } = get();
+  const commit = (next: Candle[], coalesceKey?: string) =>
+    commitAll({ candles: next }, coalesceKey);
+
+  const commitAll = (patch: Partial<Snap>, coalesceKey?: string) => {
+    const { candles, extras, past } = get();
     const now = Date.now();
     const merge =
       coalesceKey !== undefined &&
@@ -86,8 +114,9 @@ export const useChartStore = create<ChartState>((set, get) => {
     lastCoalesceKey = coalesceKey ?? '';
     lastCoalesceAt = now;
     set({
-      candles: next,
-      past: merge ? past : [...past, candles].slice(-HISTORY_LIMIT),
+      candles: patch.candles ?? candles,
+      extras: patch.extras ?? extras,
+      past: merge ? past : [...past, { candles, extras }].slice(-HISTORY_LIMIT),
       future: [],
     });
   };
@@ -104,9 +133,12 @@ export const useChartStore = create<ChartState>((set, get) => {
     result: null,
     settings: DEFAULT_SETTINGS,
     candles: [],
+    extras: [],
     past: [],
     future: [],
     selectedIds: [],
+    selectedExtraId: null,
+    editingExtraId: null,
     activeHandle: null,
     lastClickX: null,
 
@@ -121,9 +153,12 @@ export const useChartStore = create<ChartState>((set, get) => {
         error: null,
         result: null,
         candles: [],
+        extras: [],
         past: [],
         future: [],
         selectedIds: [],
+        selectedExtraId: null,
+        editingExtraId: null,
         activeHandle: null,
         lastClickX: null,
       });
@@ -140,9 +175,12 @@ export const useChartStore = create<ChartState>((set, get) => {
         error: null,
         result: null,
         candles: [],
+        extras: [],
         past: [],
         future: [],
         selectedIds: [],
+        selectedExtraId: null,
+        editingExtraId: null,
         activeHandle: null,
         lastClickX: null,
       });
@@ -169,9 +207,16 @@ export const useChartStore = create<ChartState>((set, get) => {
           });
           return;
         }
-        if (opts?.undoable) commit(result.candles);
-        else set({ candles: result.candles, past: [], future: [] });
-        set({ status: 'done', result, selectedIds: [], activeHandle: null });
+        if (opts?.undoable) commitAll({ candles: result.candles, extras: result.extras });
+        else set({ candles: result.candles, extras: result.extras, past: [], future: [] });
+        set({
+          status: 'done',
+          result,
+          selectedIds: [],
+          selectedExtraId: null,
+          editingExtraId: null,
+          activeHandle: null,
+        });
       } catch (e) {
         if (token !== detectToken) return;
         set({ status: 'error', error: e instanceof Error ? e.message : 'Detection failed.' });
@@ -190,48 +235,60 @@ export const useChartStore = create<ChartState>((set, get) => {
       }
       set({
         selectedIds: next,
+        selectedExtraId: null,
+        editingExtraId: null,
         activeHandle: next.length === 1 && next[0] === selectedIds[0] ? get().activeHandle : null,
         lastClickX: clickX ?? get().lastClickX,
       });
     },
-    clearSelection: () => set({ selectedIds: [], activeHandle: null }),
+    clearSelection: () =>
+      set({ selectedIds: [], selectedExtraId: null, editingExtraId: null, activeHandle: null }),
     setActiveHandle: (activeHandle) => set({ activeHandle }),
 
     undo: () => {
-      const { past, future, candles, selectedIds } = get();
+      const { past, future, candles, extras, selectedIds, selectedExtraId } = get();
       const prev = past[past.length - 1];
       if (!prev) return;
       lastCoalesceKey = '';
-      const ids = new Set(prev.map((c) => c.id));
+      const ids = new Set(prev.candles.map((c) => c.id));
       set({
-        candles: prev,
+        candles: prev.candles,
+        extras: prev.extras,
         past: past.slice(0, -1),
-        future: [candles, ...future].slice(0, HISTORY_LIMIT),
+        future: [{ candles, extras }, ...future].slice(0, HISTORY_LIMIT),
         selectedIds: selectedIds.filter((id) => ids.has(id)),
+        selectedExtraId: prev.extras.some((e) => e.id === selectedExtraId) ? selectedExtraId : null,
+        editingExtraId: null,
       });
     },
     redo: () => {
-      const { past, future, candles, selectedIds } = get();
+      const { past, future, candles, extras, selectedIds, selectedExtraId } = get();
       const next = future[0];
       if (!next) return;
       lastCoalesceKey = '';
-      const ids = new Set(next.map((c) => c.id));
+      const ids = new Set(next.candles.map((c) => c.id));
       set({
-        candles: next,
-        past: [...past, candles].slice(-HISTORY_LIMIT),
+        candles: next.candles,
+        extras: next.extras,
+        past: [...past, { candles, extras }].slice(-HISTORY_LIMIT),
         future: future.slice(1),
         selectedIds: selectedIds.filter((id) => ids.has(id)),
+        selectedExtraId: next.extras.some((e) => e.id === selectedExtraId) ? selectedExtraId : null,
+        editingExtraId: null,
       });
     },
 
     beginEdit: () => {
       lastCoalesceKey = '';
-      const { candles, past } = get();
-      set({ past: [...past, candles].slice(-HISTORY_LIMIT), future: [] });
+      const { candles, extras, past } = get();
+      set({ past: [...past, { candles, extras }].slice(-HISTORY_LIMIT), future: [] });
     },
     endEdit: () => {
-      const { candles, past } = get();
-      if (past[past.length - 1] === candles) set({ past: past.slice(0, -1) });
+      const { candles, extras, past } = get();
+      const last = past[past.length - 1];
+      if (last && last.candles === candles && last.extras === extras) {
+        set({ past: past.slice(0, -1) });
+      }
     },
     dragEdge: (id, key, value) =>
       set((s) => ({ candles: s.candles.map((c) => (c.id === id ? setEdge(c, key, value) : c)) })),
@@ -250,6 +307,11 @@ export const useChartStore = create<ChartState>((set, get) => {
       commit(mapSelected(flipType));
     },
     deleteSelected: () => {
+      const extraId = get().selectedExtraId;
+      if (extraId !== null) {
+        get().deleteExtra(extraId);
+        return;
+      }
       const ids = new Set(get().selectedIds);
       if (ids.size === 0) return;
       commit(get().candles.filter((c) => !ids.has(c.id)));
@@ -283,6 +345,63 @@ export const useChartStore = create<ChartState>((set, get) => {
       set({ selectedIds: parts.map((p) => p.id), activeHandle: null });
       return true;
     },
+    selectExtra: (id) =>
+      set({
+        selectedExtraId: id,
+        selectedIds: [],
+        activeHandle: null,
+        editingExtraId: id === get().editingExtraId ? id : null,
+      }),
+    setEditingExtra: (id) =>
+      set(
+        id === null
+          ? { editingExtraId: null }
+          : { editingExtraId: id, selectedExtraId: id, selectedIds: [] },
+      ),
+    updateExtra: (id, patch, coalesceKey) =>
+      commitAll(
+        { extras: get().extras.map((e) => (e.id === id ? ({ ...e, ...patch } as Extra) : e)) },
+        coalesceKey ?? `extra:${id}`,
+      ),
+    dragExtra: (id, patch) =>
+      set((s) => ({
+        extras: s.extras.map((e) => (e.id === id ? ({ ...e, ...patch } as Extra) : e)),
+      })),
+    deleteExtra: (id) => {
+      commitAll({ extras: get().extras.filter((e) => e.id !== id) });
+      set({ selectedExtraId: null, editingExtraId: null });
+    },
+    addText: (x, y) => {
+      const used = new Set(get().extras.map((e) => e.id));
+      let n = 1;
+      while (used.has(`text-${String(n).padStart(2, '0')}`)) n++;
+      const id = `text-${String(n).padStart(2, '0')}`;
+      const size = 14;
+      const color = readableOn(get().result?.background);
+      const text: TextExtra = {
+        kind: 'text',
+        id,
+        x,
+        y: y + size / 2,
+        text: 'Label',
+        size,
+        color,
+        region: { x, y: y - size / 2, width: size * 3, height: size },
+        unread: false,
+      };
+      commitAll({ extras: [...get().extras, text] });
+      set({ selectedExtraId: id, selectedIds: [], activeHandle: null, editingExtraId: id });
+      return id;
+    },
+    applyReadText: (id, text) =>
+      set((s) => ({
+        extras: s.extras.map((e) =>
+          e.id === id && e.kind === 'text' && e.unread && e.text === ''
+            ? { ...e, text: text ?? '', unread: text === null || text.trim() === '' }
+            : e,
+        ),
+      })),
+
     mergeSelected: () => {
       const { selectedIds, candles } = get();
       if (selectedIds.length !== 2) return false;
@@ -303,3 +422,10 @@ export const useChartStore = create<ChartState>((set, get) => {
 
 /** Number of candles flagged for review (confidence below the threshold). */
 export const LOW_CONFIDENCE_THRESHOLD = 0.7;
+
+/** Black on a light chart, white on a dark one. */
+function readableOn(background?: [number, number, number]): string {
+  if (!background) return '#000000';
+  const lum = 0.2126 * background[0] + 0.7152 * background[1] + 0.0722 * background[2];
+  return lum > 140 ? '#000000' : '#FFFFFF';
+}

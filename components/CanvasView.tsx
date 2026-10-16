@@ -39,6 +39,8 @@ function Viewer({ image }: { image: LoadedImage }) {
   const error = useChartStore((s) => s.error);
   const count = useChartStore((s) => s.candles.length);
   const clearSelection = useChartStore((s) => s.clearSelection);
+  const addText = useChartStore((s) => s.addText);
+  const setTab = useUiStore((s) => s.setTab);
   const showScreenshot = useUiStore((s) => s.showScreenshot);
 
   const viewport = useRef<HTMLDivElement>(null);
@@ -198,6 +200,15 @@ function Viewer({ image }: { image: LoadedImage }) {
             width: contentW,
             height: contentH,
             transform: `translate(${view.x}px, ${view.y}px)`,
+          }}
+          onDoubleClick={(e) => {
+            // double-clicking empty space (the picture itself) adds a label there
+            if (!(e.target instanceof HTMLImageElement)) return;
+            const box = e.currentTarget.getBoundingClientRect();
+            const x = Math.round(((e.clientX - box.left) / cssScale) * 2) / 2;
+            const y = Math.round(((e.clientY - box.top) / cssScale) * 2) / 2;
+            addText(x, y);
+            setTab('extras');
           }}
         >
           {/* eslint-disable-next-line @next/next/no-img-element -- local object URL, must stay untouched */}

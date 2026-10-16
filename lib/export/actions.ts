@@ -9,7 +9,7 @@ import { svgToPngBlob } from './png';
 
 /** The SVG for the current candles, preset and export options. null if there is nothing yet. */
 export function currentSvg(): string | null {
-  const { image, candles } = useChartStore.getState();
+  const { image, candles, extras } = useChartStore.getState();
   if (!image || candles.length === 0) return null;
   const preset = getResolvedPreset();
   const { exportBackground } = useUiStore.getState();
@@ -19,6 +19,7 @@ export function currentSvg(): string | null {
     { width: image.width, height: image.height },
     {
       background: exportBackground,
+      extras,
     },
   );
 }

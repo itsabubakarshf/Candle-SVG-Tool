@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-export type PanelTab = 'detect' | 'colors' | 'candle' | 'export';
+export type PanelTab = 'detect' | 'colors' | 'candle' | 'extras' | 'export';
 export type PngScale = 2 | 3 | 4;
 
 interface UiState {

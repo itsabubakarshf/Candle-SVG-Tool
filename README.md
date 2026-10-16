@@ -13,6 +13,14 @@ Everything runs in the browser. Images and presets never leave your machine.
 4. Press **Copy SVG** and paste into Figma with Ctrl+V. Candles arrive as named vector layers
    (`Candle 01` → `Upper wick`, `Lower wick`, `Body`).
 
+Lines (solid, dashed, dotted, straight or slanted, any colour), shaded boxes and text labels next
+to the candles are found too and copied into the SVG as vector shapes: boxes behind the candles,
+lines and labels in front (`Boxes`, `Lines` and `Labels` layers). Text is read by an OCR library
+that runs in the browser (the files are served by this site, nothing is uploaded). If a label is
+read wrongly or not at all, double-click it on the picture and type it. Double-click empty space to
+add a label; click a line or box to move, resize, recolour or delete it. All of it is in the
+**Extras** tab and undoes like everything else.
+
 If the screenshot has anything besides candles (a line, a box, price numbers, a watermark), Crisper
 shows one notice: "This chart is not clean". It looks at where things are, never at colours, so
 candles in any colour are fine. The check stays silent when unsure.

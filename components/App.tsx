@@ -9,8 +9,9 @@ import { UploadZone } from '@/components/UploadZone';
 import { SidePanel } from '@/components/panel/SidePanel';
 import { Toaster } from '@/components/ui/sonner';
 import { useImageIntake } from '@/lib/image/useImageIntake';
+import { useReadLabels } from '@/lib/ocr/useReadLabels';
 import { useShortcuts } from '@/lib/shortcuts/useShortcuts';
-import { UNCLEAN_HELP, UNCLEAN_TITLE } from '@/lib/detect/notice';
+import { UNCLEAN_HELP, UNCLEAN_TITLE, describeExtras } from '@/lib/detect/notice';
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
 import { usePresetStore } from '@/store/presetStore';
 import { useThemeStore } from '@/store/themeStore';
@@ -18,6 +19,7 @@ import { useThemeStore } from '@/store/themeStore';
 export function App() {
   const ingest = useImageIntake();
   useShortcuts();
+  useReadLabels();
   const image = useChartStore((s) => s.image);
   const status = useChartStore((s) => s.status);
   const error = useChartStore((s) => s.error);
@@ -46,10 +48,16 @@ export function App() {
       return;
     }
     const flagged = candles.filter((c) => c.confidence < LOW_CONFIDENCE_THRESHOLD).length;
+    const extras = result?.extras ?? [];
     toast.success(
       `${candles.length} ${candles.length === 1 ? 'candle' : 'candles'} found${
         flagged ? `, ${flagged} flagged for review` : ''
       }.`,
+      extras.length > 0
+        ? {
+            description: `Also found ${describeExtras(extras)}. They are in the SVG too: check the Extras tab.`,
+          }
+        : undefined,
     );
   }, [image, status, error]);
 

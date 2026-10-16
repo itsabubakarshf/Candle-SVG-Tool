@@ -5,6 +5,7 @@ import { candleShape } from '@/lib/svg/geometry';
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
 import { useResolvedPreset } from '@/store/resolvePreset';
 import { useUiStore } from '@/store/uiStore';
+import { ExtraHits, ExtraShapes } from './ExtraLayers';
 import { Handles } from './Handles';
 
 interface CandleOverlayProps {
@@ -17,6 +18,7 @@ interface CandleOverlayProps {
 /** The SVG drawn over the screenshot, in source-image pixels, plus selection and flags. */
 export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
   const candles = useChartStore((s) => s.candles);
+  const extras = useChartStore((s) => s.extras);
   const selectedIds = useChartStore((s) => s.selectedIds);
   const select = useChartStore((s) => s.select);
   const preset = useResolvedPreset();
@@ -47,6 +49,7 @@ export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
       style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}
     >
       <g opacity={opacity} data-testid="overlay-shapes">
+        <ExtraShapes extras={extras} layer="below" />
         {ordered.map((c, i) => {
           const s = candleShape(c, i, preset);
           return (
@@ -75,7 +78,10 @@ export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
             </g>
           );
         })}
+        <ExtraShapes extras={extras} layer="above" />
       </g>
+
+      <ExtraHits extras={extras} cssScale={cssScale} layer="below" />
 
       {ordered.map((c, i) => {
         const top = (c.wickTop ?? c.bodyTop) - 2 * px;
@@ -129,6 +135,8 @@ export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
           </g>
         );
       })}
+
+      <ExtraHits extras={extras} cssScale={cssScale} layer="above" />
 
       {selected && <Handles candle={selected} cssScale={cssScale} />}
     </svg>

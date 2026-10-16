@@ -1,4 +1,5 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import { expect, test, type Page } from '@playwright/test';
 import {
   SAMPLE,
@@ -763,23 +764,144 @@ test.describe('chart cleanliness', () => {
     await expect(page.getByTestId('unclean-notice')).toHaveCount(0);
   });
 
-  test('a chart with a line and price labels gets exactly one warning', async ({ page }) => {
-    const img = copyImage(renderChart(simpleChart([25, 25, 25, 25, 25])).image);
+  test('a line and price labels become shapes: one "found" notice, no warning', async ({
+    page,
+  }) => {
+    const chart = simpleChart([25, 25, 25, 25, 25]);
+    // room on the right for a price scale
+    const img = copyImage(renderChart({ ...chart, width: chart.width + 60 }).image);
     overlayLine(img, { x0: 0, y0: 40, x1: img.width, y1: 40, color: [41, 98, 255] });
     ['4523.5', '4518.0', '4512.5'].forEach((t, i) =>
-      overlayText(img, t, img.width - 40, 20 + i * 70, { color: [120, 128, 140], scale: 2 }),
+      overlayText(img, t, img.width - 52, 20 + i * 70, { color: [120, 128, 140], scale: 2 }),
     );
     await loadBuffer(page, pngOf(img));
-    await expect(warnings(page)).toHaveCount(1);
-    await expect(
-      page.getByText('Only candles are allowed', { exact: false }).first(),
-    ).toBeVisible();
-    await expect(page.getByTestId('unclean-notice')).toBeVisible();
-    // Re-detecting the same picture does not nag again.
+    await expect(page.getByText('Also found 1 line and 3 labels').first()).toBeVisible();
+    await expect(warnings(page)).toHaveCount(0);
+    await expect(page.getByTestId('unclean-notice')).toHaveCount(0);
+    // Re-detecting the same picture does not announce it again.
     await page.getByRole('button', { name: 'Re-detect' }).click();
-    await expect(warnings(page)).toHaveCount(1);
-    // The candles can still be used.
+    await expect(page.getByText('Also found 1 line and 3 labels')).toHaveCount(1);
     await expect(page.getByRole('button', { name: 'Copy SVG' }).first()).toBeEnabled();
+  });
+});
+
+test.describe('lines, boxes and labels', () => {
+  const EXTRAS = path.join(__dirname, '..', 'tests', 'fixtures', 'extras-b.png');
+  const load = async (page: Page) => {
+    await page.goto('/');
+    await page.setInputFiles('input[type=file]', EXTRAS);
+    await expect(page.getByTestId('candle-count')).toHaveText('5 candles');
+  };
+
+  test('they are found, drawn on the picture and listed in the Extras tab', async ({ page }) => {
+    await load(page);
+    await page.getByRole('tab', { name: 'Extras' }).click();
+    await expect(page.getByTestId('extras-summary')).toHaveText('3 lines, 1 box, 1 label');
+    await expect(page.locator('[data-testid="overlay-boxes"] rect')).toHaveCount(1);
+    await expect(page.locator('[data-testid="overlay-lines"] line')).toHaveCount(3);
+    await expect(page.getByText('Also found 3 lines, 1 box and 1 label').first()).toBeVisible();
+  });
+
+  test('the label is read from the picture, in the browser', async ({ page }) => {
+    await load(page);
+    await page.getByRole('tab', { name: 'Extras' }).click();
+    await expect(page.getByText('Label: 18:00')).toBeVisible({ timeout: 60_000 });
+    await expect(page.locator('[data-testid="overlay-lines"] text')).toHaveText('18:00');
+  });
+
+  test('Copy SVG puts boxes, lines (dotted too) and the label in named layers', async ({
+    page,
+  }) => {
+    await load(page);
+    await expect(page.getByTestId('extras-found')).toBeVisible();
+    await expect(page.locator('[data-testid="overlay-lines"] text')).toHaveText('18:00', {
+      timeout: 60_000,
+    });
+    const svg = await copiedSvg(page);
+    expect(svg).toContain('<g id="Boxes">');
+    expect(svg).toContain('<rect id="Box 01"');
+    expect(svg).toContain('<g id="Lines">');
+    expect(svg).toContain('<line id="Line 03"');
+    expect(svg).toMatch(/stroke-dasharray="[\d.]+ [\d.]+"/);
+    expect(svg).toContain('<g id="Labels">');
+    expect(svg).toMatch(/<text id="Label 01"[^>]*>18:00<\/text>/);
+    // the box is behind the candles, the lines and labels in front
+    expect(svg.indexOf('id="Boxes"')).toBeLessThan(svg.indexOf('id="Candle 01"'));
+    expect(svg.indexOf('id="Lines"')).toBeGreaterThan(svg.indexOf('id="Candle 05"'));
+    expect(svg.indexOf('id="Labels"')).toBeGreaterThan(svg.indexOf('id="Lines"'));
+  });
+
+  test('double-click a label to fix its text, and undo brings the old one back', async ({
+    page,
+  }) => {
+    await load(page);
+    const label = page.locator('[data-testid="overlay-lines"] text');
+    await expect(label).toHaveText('18:00', { timeout: 60_000 });
+    await page.getByTestId('extra-hit-text-01').dblclick();
+    const editor = page.getByTestId('label-editor');
+    await expect(editor).toBeFocused();
+    await editor.fill('19:30');
+    await editor.press('Enter');
+    await expect(label).toHaveText('19:30');
+    expect(await copiedSvg(page)).toMatch(/<text id="Label 01"[^>]*>19:30<\/text>/);
+    await page.keyboard.press('Control+z');
+    await expect(label).toHaveText('18:00');
+  });
+
+  test('a label that cannot be read is marked, and typing it makes it part of the SVG', async ({
+    page,
+  }) => {
+    await page.route('**/ocr/**', (route) => route.abort());
+    await load(page);
+    await page.getByRole('tab', { name: 'Extras' }).click();
+    await expect(page.getByTestId('unread-count')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Text could not be read automatically.')).toBeVisible();
+    expect(await copiedSvg(page)).not.toContain('<text');
+    await page.getByTestId('extra-row-text-01').click();
+    await page.getByTestId('label-text').fill('18:00');
+    await expect(page.getByTestId('unread-count')).toHaveCount(0);
+    expect(await copiedSvg(page)).toMatch(/<text id="Label 01"[^>]*>18:00<\/text>/);
+  });
+
+  test('double-click on empty space adds a label you can type into', async ({ page }) => {
+    await load(page);
+    await page.route('**/ocr/**', (route) => route.abort());
+    const content = page.getByTestId('content');
+    const box = (await content.boundingBox())!;
+    await page.mouse.dblclick(box.x + 20, box.y + 20);
+    const editor = page.getByTestId('label-editor');
+    await expect(editor).toBeFocused();
+    await editor.fill('Entry');
+    await editor.press('Enter');
+    await expect(page.getByText('Label: Entry')).toBeVisible();
+    expect(await copiedSvg(page)).toMatch(/>Entry<\/text>/);
+  });
+
+  test('a line can be selected, dragged by its end, recoloured and deleted', async ({ page }) => {
+    await load(page);
+    await page.getByRole('tab', { name: 'Extras' }).click();
+    await page.getByRole('button', { name: /Line, dotted/ }).click();
+    await expect(page.getByRole('region', { name: 'Selected' })).toBeVisible();
+    const before = await page.locator('[data-testid="extra-handle-end"]').boundingBox();
+    expect(before).not.toBeNull();
+    await page.mouse.move(before!.x + before!.width / 2, before!.y + before!.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(before!.x + 30, before!.y + before!.height / 2, { steps: 5 });
+    await page.mouse.up();
+    const after = await page.locator('[data-testid="extra-handle-end"]').boundingBox();
+    expect(after!.x).toBeGreaterThan(before!.x + 20);
+    await page.keyboard.press('Control+z');
+    const undone = await page.locator('[data-testid="extra-handle-end"]').boundingBox();
+    expect(Math.abs(undone!.x - before!.x)).toBeLessThan(1);
+    await page.keyboard.press('Delete');
+    await expect(page.locator('[data-testid="overlay-lines"] line')).toHaveCount(2);
+  });
+
+  test('a chart with only candles shows no extras', async ({ page }) => {
+    await loadSample(page);
+    await page.getByRole('tab', { name: 'Extras' }).click();
+    await expect(page.getByTestId('extras-summary')).toHaveText('No lines, boxes or labels found.');
+    await expect(page.getByTestId('extras-found')).toHaveCount(0);
   });
 });
 

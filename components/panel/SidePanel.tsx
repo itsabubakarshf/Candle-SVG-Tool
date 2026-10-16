@@ -5,6 +5,7 @@ import { useUiStore, type PanelTab } from '@/store/uiStore';
 import { DetectTab } from './DetectTab';
 import { ColorsTab } from './ColorsTab';
 import { CandleTab } from './CandleTab';
+import { ExtrasTab } from './ExtrasTab';
 import { ExportTab } from './ExportTab';
 
 export function SidePanel() {
@@ -20,6 +21,7 @@ export function SidePanel() {
           <TabsTrigger value="detect">Detect</TabsTrigger>
           <TabsTrigger value="colors">Colors</TabsTrigger>
           <TabsTrigger value="candle">Candle</TabsTrigger>
+          <TabsTrigger value="extras">Extras</TabsTrigger>
           <TabsTrigger value="export">Export</TabsTrigger>
         </TabsList>
         <TabsContent value="detect">
@@ -30,6 +32,9 @@ export function SidePanel() {
         </TabsContent>
         <TabsContent value="candle">
           <CandleTab />
+        </TabsContent>
+        <TabsContent value="extras">
+          <ExtrasTab />
         </TabsContent>
         <TabsContent value="export">
           <ExportTab />

@@ -15,7 +15,8 @@ export const SHORTCUTS: Array<{ keys: string; action: string }> = [
   { keys: 'Ctrl + V', action: 'Paste a screenshot (anywhere on the page)' },
   { keys: 'Ctrl + C', action: 'Copy the SVG (when you are not editing text)' },
   { keys: 'T', action: 'Flip the selected candle between bull and bear' },
-  { keys: 'Delete / Backspace', action: 'Delete the selected candle' },
+  { keys: 'Delete / Backspace', action: 'Delete the selected candle, line, box or label' },
+  { keys: 'Double-click', action: 'Edit a label, or add one on empty space' },
   { keys: 'Ctrl + Z', action: 'Undo' },
   { keys: 'Ctrl + Shift + Z', action: 'Redo (Ctrl + Y also works)' },
   { keys: 'Esc', action: 'Clear the selection' },
@@ -75,7 +76,7 @@ export function useShortcuts(): void {
         return;
       }
       if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (chart.selectedIds.length > 0) {
+        if (chart.selectedIds.length > 0 || chart.selectedExtraId !== null) {
           e.preventDefault();
           chart.deleteSelected();
         }
