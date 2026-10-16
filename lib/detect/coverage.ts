@@ -4,18 +4,27 @@ import type { PixelImage } from './types';
 
 const CACHE_SIZE = 1 << 16;
 
+export interface ColourMaps {
+  /** ΔE (CIE76) between every pixel and the background. */
+  de: Float32Array;
+  /** |ΔL*| between every pixel and the background (lightness only). */
+  dl: Float32Array;
+}
+
 /**
- * ΔE (CIE76, in Lab) between every pixel and the background colour.
+ * ΔE (CIE76, in Lab) and lightness difference between every pixel and the background.
  * Works on the original pixels: no resizing, no smoothing.
  */
-export function deltaEMap(image: PixelImage, bg: Rgb): Float32Array {
+export function colourMaps(image: PixelImage, bg: Rgb): ColourMaps {
   const { width, height, data } = image;
   const out = new Float32Array(width * height);
+  const outL = new Float32Array(width * height);
   const bgLab = rgbToLab(bg[0], bg[1], bg[2]);
 
   // Small direct-mapped cache: charts have few distinct colours, JPEG noise adds more.
   const keys = new Int32Array(CACHE_SIZE).fill(-1);
   const vals = new Float32Array(CACHE_SIZE);
+  const valsL = new Float32Array(CACHE_SIZE);
 
   for (let p = 0, i = 0; p < out.length; p++, i += 4) {
     const a = data[i + 3] as number;
@@ -27,14 +36,19 @@ export function deltaEMap(image: PixelImage, bg: Rgb): Float32Array {
     const slot = (Math.imul(key, 2654435761) >>> 16) & (CACHE_SIZE - 1);
     if (keys[slot] === key) {
       out[p] = vals[slot] as number;
+      outL[p] = valsL[slot] as number;
     } else {
-      const v = deltaE(rgbToLab(r, g, b), bgLab);
+      const lab = rgbToLab(r, g, b);
+      const v = deltaE(lab, bgLab);
+      const l = Math.abs(lab[0] - bgLab[0]);
       keys[slot] = key;
       vals[slot] = v;
+      valsL[slot] = l;
       out[p] = v;
+      outL[p] = l;
     }
   }
-  return out;
+  return { de: out, dl: outL };
 }
 
 /** Coverage = clamp((ΔE − T_low) / (T_high − T_low), 0, 1). */
