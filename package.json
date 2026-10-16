@@ -12,6 +12,7 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
+    "build:e2e": "node scripts/copy-ocr-assets.mjs && NEXT_PUBLIC_SUPABASE_URL= NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY= next build && NEXT_DIST_DIR=.next-cloud NEXT_PUBLIC_SUPABASE_URL=https://test.supabase.co NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=sb_publishable_test next build",
     "e2e": "playwright test",
     "ocr:assets": "node scripts/copy-ocr-assets.mjs"
   },

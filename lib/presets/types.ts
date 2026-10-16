@@ -13,4 +13,6 @@ export interface Preset {
   wickWidth: number;
   /** Hex colour, or null for a transparent background. */
   background: string | null;
+  /** Set on another person's shared preset: it can be used and copied, never changed. */
+  community?: { ownerName: string | null };
 }

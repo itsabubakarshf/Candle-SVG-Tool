@@ -4,6 +4,7 @@ import { useEffect, useRef } from 'react';
 import { toast } from 'sonner';
 import { CanvasView } from '@/components/CanvasView';
 import { ShortcutsDialog } from '@/components/ShortcutsDialog';
+import { SignInDialog } from '@/components/SignInDialog';
 import { TopBar } from '@/components/TopBar';
 import { UploadZone } from '@/components/UploadZone';
 import { SidePanel } from '@/components/panel/SidePanel';
@@ -71,6 +72,7 @@ export function App() {
         <SidePanel />
       </div>
       <ShortcutsDialog />
+      <SignInDialog />
       <Toaster />
     </div>
   );

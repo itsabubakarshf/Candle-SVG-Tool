@@ -1,7 +1,7 @@
 'use client';
 
 import { useRef } from 'react';
-import { Copy, Download, Plus, Save, Trash2, Undo2, Upload } from 'lucide-react';
+import { Copy, Download, LogIn, LogOut, Plus, Save, Trash2, Undo2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { ColorField } from '@/components/ColorField';
 import { Button } from '@/components/ui/button';
@@ -26,6 +26,10 @@ export function ColorsTab() {
   const draft = usePresetStore((s) => s.draft);
   const storageOk = usePresetStore((s) => s.storageOk);
   const cloud = usePresetStore((s) => s.cloud);
+  const account = usePresetStore((s) => s.account);
+  const setSignInOpen = usePresetStore((s) => s.setSignInOpen);
+  const signOut = usePresetStore((s) => s.signOut);
+  const ensureSignedIn = usePresetStore((s) => s.ensureSignedIn);
   const edit = usePresetStore(selectActivePreset);
   const setActive = usePresetStore((s) => s.setActive);
   const editDraft = usePresetStore((s) => s.editDraft);
@@ -45,6 +49,7 @@ export function ColorsTab() {
   const dirty = draft !== null;
 
   const onImport = async (file: File) => {
+    if (!ensureSignedIn()) return;
     const text = await file.text();
     const result = importJson(text, (name) =>
       window.confirm(
@@ -110,7 +115,9 @@ export function ColorsTab() {
                   ))}
                 </span>
                 {p.builtIn && (
-                  <span className="ml-2 text-[10px] uppercase text-muted-foreground">built-in</span>
+                  <span className="ml-2 max-w-[6rem] shrink-0 truncate text-[10px] uppercase text-muted-foreground">
+                    {p.community ? (p.community.ownerName ?? 'shared') : 'built-in'}
+                  </span>
                 )}
               </button>
             </li>
@@ -175,11 +182,42 @@ export function ColorsTab() {
           />
         </div>
         {cloud !== 'off' && (
-          <p className="text-xs text-muted-foreground" data-testid="cloud-status">
-            {cloud === 'offline'
-              ? 'Could not reach the online copy. Presets are still saved in this browser.'
-              : 'Presets are also kept online for this browser, with no login. Screenshots are never uploaded.'}
-          </p>
+          <div
+            className="flex items-center justify-between gap-2 rounded-lg bg-muted px-3 py-2 text-xs"
+            data-testid="account-strip"
+          >
+            {account ? (
+              <>
+                <span className="min-w-0 truncate text-muted-foreground">
+                  Signed in as{' '}
+                  <span className="text-foreground">{account.name ?? account.email}</span>
+                  {cloud === 'offline' && ' · offline'}
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => void signOut()}
+                >
+                  <LogOut className="h-3.5 w-3.5" aria-hidden />
+                  Sign out
+                </Button>
+              </>
+            ) : (
+              <>
+                <span className="text-muted-foreground">Sign in to save your own presets.</span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2"
+                  onClick={() => setSignInOpen(true)}
+                >
+                  <LogIn className="h-3.5 w-3.5" aria-hidden />
+                  Sign in
+                </Button>
+              </>
+            )}
+          </div>
         )}
         {!storageOk && (
           <p role="alert" className="text-xs text-red-600 dark:text-red-400">
@@ -196,7 +234,7 @@ export function ColorsTab() {
           onSave={() => {
             if (!sourceStyle) return;
             const saved = createFromSource(sourceStyle);
-            toast.success(`Saved "${saved.name}". You can edit it now.`);
+            if (saved) toast.success(`Saved "${saved.name}". You can edit it now.`);
           }}
         />
       ) : (
@@ -258,7 +296,9 @@ export function ColorsTab() {
 
           {edit.builtIn && (
             <p className="text-xs text-muted-foreground">
-              Built-in presets can&apos;t be changed. Saving your edits makes a new preset.
+              {edit.community
+                ? "This preset belongs to someone else, so you can't change it. Saving your edits makes a copy that is yours."
+                : "Built-in presets can't be changed. Saving your edits makes a new preset."}
             </p>
           )}
           <div className="grid grid-cols-2 gap-2">

@@ -14,10 +14,16 @@ import type { Preset } from '@/lib/presets/types';
 import {
   cloudConfigured,
   deleteCloudPreset,
-  mergeRemote,
+  mergeShared,
   pullPresets,
   pushPresets,
+  signOut,
+  stashPending,
+  takePending,
+  watchAccount,
+  type Account,
 } from '@/lib/presets/cloud';
+import { toast } from 'sonner';
 
 export type CloudStatus = 'off' | 'syncing' | 'synced' | 'offline';
 
@@ -34,6 +40,14 @@ interface PresetState {
   storageOk: boolean;
   /** Online copy of the presets: off when not set up, offline when it could not be reached. */
   cloud: CloudStatus;
+  /** The signed-in account. Saving a preset needs one whenever the online database is set up. */
+  account: Account | null;
+  /** The "sign in to save" dialog. */
+  signInOpen: boolean;
+  setSignInOpen: (open: boolean) => void;
+  /** True if the visitor may save; otherwise opens the sign-in dialog. */
+  ensureSignedIn: () => boolean;
+  signOut: () => Promise<void>;
 
   /** Loads saved presets. Called once on the client; the server render uses the built-ins. */
   hydrate: () => void;
@@ -42,9 +56,10 @@ interface PresetState {
   discardDraft: () => void;
   /** Saves the draft. A built-in is never changed: it is saved as a new preset instead. */
   saveDraft: () => Preset | null;
-  newPreset: () => Preset;
+  /** The save actions return null when the visitor has to sign in first. */
+  newPreset: () => Preset | null;
   /** Saves the colours measured from the screenshot as a preset of its own. */
-  createFromSource: (style: SourceStyle) => Preset;
+  createFromSource: (style: SourceStyle) => Preset | null;
   duplicate: (id: string) => Preset | null;
   remove: (id: string) => boolean;
   importJson: (
@@ -75,34 +90,93 @@ export const usePresetStore = create<PresetState>((set, get) => {
 
   let pushTimer: ReturnType<typeof setTimeout> | undefined;
   const pushSoon = (presets: Preset[]) => {
-    if (!cloudConfigured()) return;
+    const account = get().account;
+    if (!cloudConfigured() || !account) return;
     clearTimeout(pushTimer);
     pushTimer = setTimeout(async () => {
-      const ok = await pushPresets(presets.filter((p) => !p.builtIn));
+      const ok = await pushPresets(
+        presets.filter((p) => !p.builtIn),
+        account,
+      );
       set({ cloud: ok ? 'synced' : 'offline' });
     }, 600);
+  };
+
+  /** True if the visitor may save. Otherwise the sign-in dialog opens and the preset waits. */
+  const maySave = (candidate?: Preset): boolean => {
+    if (!cloudConfigured() || get().account) return true;
+    if (candidate) stashPending(candidate);
+    set({ signInOpen: true });
+    return false;
   };
 
   const syncFromCloud = async () => {
     if (!cloudConfigured()) return;
     set({ cloud: 'syncing' });
-    const remote = await pullPresets();
+    const account = get().account;
+    const remote = await pullPresets(account?.id ?? null);
     if (!remote) {
       set({ cloud: 'offline' });
       return;
     }
-    const { presets } = get();
-    const merged = mergeRemote(presets, remote);
-    if (merged.length !== presets.length) {
-      set({ presets: merged });
-      saveUserPresets(merged);
+    const local = get().presets.filter((p) => !p.community);
+    const remoteOwn = remote.filter((p) => !p.community);
+    const shared = remote.filter((p) => p.community);
+    const presets = mergeShared(mergeShared(local, remoteOwn), shared);
+    const saved = loadActiveId();
+    const restore =
+      get().activeId === ORIGINAL_ID && saved && presets.some((p) => p.id === saved) ? saved : null;
+    set({ presets, ...(restore ? { activeId: restore } : {}) });
+    saveUserPresets(presets);
+
+    let ok = true;
+    if (account) {
+      // Presets made in this browser before signing in go up to the account.
+      const online = new Set(remoteOwn.map((p) => p.id));
+      const missing = local.filter((p) => !p.builtIn && !online.has(p.id));
+      if (missing.length > 0) ok = await pushPresets(missing, account);
+      // A preset made just before signing in is saved now.
+      const waiting = takePending();
+      if (waiting) {
+        const current = get().presets;
+        const added: Preset = {
+          ...waiting,
+          id: newPresetId(),
+          builtIn: false,
+          community: undefined,
+          name: uniqueName(waiting.name, current),
+        };
+        const next = [...current, added];
+        set({ presets: next, activeId: added.id, draft: null });
+        persist(next, added.id);
+        toast.success(`Saved "${added.name}" to your account.`);
+      }
     }
-    // Presets made before the cloud was on (or while offline) go up now.
-    const have = new Set(remote.map((p) => p.id));
-    const missing = merged.filter((p) => !p.builtIn && !have.has(p.id));
-    const ok = missing.length === 0 || (await pushPresets(missing));
     set({ cloud: ok ? 'synced' : 'offline' });
   };
+
+  let firstAccountEvent = true;
+  const handleAccount = (next: Account | null) => {
+    const prev = get().account;
+    const unchanged = !firstAccountEvent && prev?.id === next?.id;
+    firstAccountEvent = false;
+    if (unchanged) {
+      if (next) set({ account: next });
+      return;
+    }
+    set({ account: next });
+    if (prev && !next) {
+      // Signed out: this browser keeps none of that account's presets.
+      const { presets, activeId } = get();
+      const kept = presets.filter((p) => p.builtIn);
+      const own = presets.some((p) => p.id === activeId && !p.builtIn);
+      set({ presets: kept, activeId: own ? ORIGINAL_ID : activeId, draft: null });
+      saveUserPresets(kept);
+    }
+    void syncFromCloud();
+  };
+
+  let watching = false;
 
   return {
     presets: initialPresets(),
@@ -112,6 +186,13 @@ export const usePresetStore = create<PresetState>((set, get) => {
     hydrated: false,
     storageOk: true,
     cloud: 'off',
+    account: null,
+    signInOpen: false,
+    setSignInOpen: (open) => set({ signInOpen: open }),
+    ensureSignedIn: () => maySave(),
+    signOut: async () => {
+      await signOut();
+    },
 
     hydrate: () => {
       const user = loadUserPresets();
@@ -120,7 +201,10 @@ export const usePresetStore = create<PresetState>((set, get) => {
       const known = saved === ORIGINAL_ID || presets.some((p) => p.id === saved);
       const activeId = saved && known ? saved : ORIGINAL_ID;
       set({ presets, activeId, draft: null, hydrated: true });
-      void syncFromCloud();
+      if (cloudConfigured() && !watching) {
+        watching = true;
+        watchAccount(handleAccount);
+      }
     },
 
     setActive: (id) => {
@@ -149,13 +233,14 @@ export const usePresetStore = create<PresetState>((set, get) => {
           draft.name === original?.name ? `${draft.name} copy` : draft.name,
           presets,
         );
-        saved = { ...draft, id: newPresetId(), builtIn: false, name };
+        saved = { ...draft, id: newPresetId(), builtIn: false, community: undefined, name };
         next = [...presets, saved];
       } else {
         const name = uniqueName(draft.name.trim() || 'Preset', presets, draft.id);
         saved = { ...draft, name };
         next = presets.map((p) => (p.id === saved.id ? saved : p));
       }
+      if (!maySave(saved)) return null;
       set({ presets: next, activeId: saved.id, draft: null });
       persist(next, saved.id);
       return saved;
@@ -169,7 +254,9 @@ export const usePresetStore = create<PresetState>((set, get) => {
         id: newPresetId(),
         builtIn: false,
         name: uniqueName('New preset', presets),
+        community: undefined,
       };
+      if (!maySave(created)) return null;
       const next = [...presets, created];
       set({ presets: next, activeId: created.id, draft: null });
       persist(next, created.id);
@@ -189,6 +276,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
         wickWidth: style.wickWidth,
         background: null,
       };
+      if (!maySave(created)) return null;
       const next = [...presets, created];
       set({ presets: next, activeId: created.id, draft: null });
       persist(next, created.id);
@@ -206,7 +294,9 @@ export const usePresetStore = create<PresetState>((set, get) => {
         id: newPresetId(),
         builtIn: false,
         name: uniqueName(`${source.name} copy`, presets),
+        community: undefined,
       };
+      if (!maySave(copy)) return null;
       const next = [...presets, copy];
       set({ presets: next, activeId: copy.id, draft: null });
       persist(next, copy.id);
@@ -221,7 +311,8 @@ export const usePresetStore = create<PresetState>((set, get) => {
       const nextActive = activeId === id ? ORIGINAL_ID : activeId;
       set({ presets: next, activeId: nextActive, draft: null });
       persist(next, nextActive);
-      if (cloudConfigured()) void deleteCloudPreset(id);
+      const account = get().account;
+      if (cloudConfigured() && account) void deleteCloudPreset(id, account);
       return true;
     },
 

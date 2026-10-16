@@ -71,7 +71,7 @@ describe('preset store', () => {
   });
 
   it('creates, duplicates, renames and deletes user presets', () => {
-    const created = s().newPreset();
+    const created = s().newPreset()!;
     expect(created.name).toBe('New preset');
     const dup = s().duplicate(created.id)!;
     expect(dup.name).toBe('New preset copy');
@@ -88,13 +88,13 @@ describe('preset store', () => {
   });
 
   it('keeps names unique', () => {
-    const a = s().newPreset();
-    const b = s().newPreset();
+    const a = s().newPreset()!;
+    const b = s().newPreset()!;
     expect(a.name).not.toBe(b.name);
   });
 
   it('deleting the active preset falls back to Original colours', () => {
-    const p = s().newPreset();
+    const p = s().newPreset()!;
     expect(s().activeId).toBe(p.id);
     s().remove(p.id);
     expect(s().activeId).toBe(ORIGINAL_ID);
@@ -249,13 +249,13 @@ describe('Original colours (the default: keep the uploaded chart as it is)', () 
   });
 
   it('can be saved as a preset of its own, which then becomes active', () => {
-    const saved = s().createFromSource(SOURCE);
+    const saved = s().createFromSource(SOURCE)!;
     expect(saved.builtIn).toBe(false);
     expect(saved.name).toBe('From screenshot');
     expect(saved.bear).toEqual(SOURCE.bear);
     expect(saved.borderWidth).toBe(1.25);
     expect(s().activeId).toBe(saved.id);
     expect(data[PRESETS_KEY]).toContain('From screenshot');
-    expect(s().createFromSource(SOURCE).name).toBe('From screenshot 2');
+    expect(s().createFromSource(SOURCE)!.name).toBe('From screenshot 2');
   });
 });

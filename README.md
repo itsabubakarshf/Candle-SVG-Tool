@@ -29,16 +29,22 @@ In Figma a normal resize keeps wicks and borders thin. The Scale tool (K) scales
 
 ## Saved presets online
 
-Your presets are also kept in a Supabase database, so you do not log in to save them. The app
-signs each browser in anonymously and row-level security lets a browser see only its own rows.
-Only presets are stored, never screenshots. If the service is off or unreachable the presets
-stay in the browser as before. Presets belong to the browser: clearing site data starts a new
-anonymous user, so Export is still the way to move presets between devices.
+Crisper needs no account. Saving a preset does: the app asks you to sign in with Google or an
+emailed link first. Saved presets are shared. Anyone can pick and use any of them, but only the
+account that made a preset can change or delete it (the database enforces this with row-level
+security). Editing someone else's preset saves a copy that is yours. Only presets are stored,
+never screenshots. If the service is off or unreachable the app still works.
 
-Setup: copy `.env.example` to `.env.local` and fill in the project URL and publishable key. In
-Supabase turn on Authentication → Sign In / Providers → Allow anonymous sign-ins. The table is
-`public.presets (user_id, id, name, data, updated_at)`. Free projects pause after a week without
-traffic, so the app only works online while the project is awake.
+Setup: copy `.env.example` to `.env.local` and fill in the Supabase project URL and publishable
+key. Without them presets are saved in the browser only. In Supabase:
+
+- Authentication, URL Configuration: set the Site URL to the app's address and add it to the
+  redirect URLs, so sign-in links come back to the app.
+- Authentication, Sign In / Providers: email is on by default. To offer Google, add a Google
+  OAuth client ID and secret there.
+- The table is `public.presets (user_id, id, name, owner_name, data, updated_at)`.
+
+Free Supabase projects pause after a week without traffic.
 
 ## Develop
 
@@ -46,7 +52,7 @@ traffic, so the app only works online while the project is awake.
 pnpm install
 pnpm dev          # http://localhost:3000
 pnpm test         # unit tests (detection accuracy report is printed)
-pnpm build && pnpm e2e   # end-to-end tests against the production build
+pnpm build:e2e && pnpm e2e   # end-to-end tests against production builds (online presets off and on)
 pnpm lint && pnpm typecheck && pnpm format:check
 ```
 
