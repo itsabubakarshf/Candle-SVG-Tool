@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">
+  <g id="Candle 01">
+    <line id="Upper wick" x1="20.5" y1="10" x2="20.5" y2="30" stroke="#2B2F36" stroke-width="1" stroke-linecap="butt"/>
+    <line id="Lower wick" x1="20.5" y1="80" x2="20.5" y2="100" stroke="#2B2F36" stroke-width="1" stroke-linecap="butt"/>
+    <rect id="Body" x="10.5" y="30.5" width="20" height="49" fill="#FFFFFF" stroke="#2B2F36" stroke-width="1"/>
+  </g>
+  <g id="Candle 02">
+    <line id="Upper wick" x1="60.5" y1="20" x2="60.5" y2="40" stroke="#2B2F36" stroke-width="1" stroke-linecap="butt"/>
+    <line id="Lower wick" x1="60.5" y1="90" x2="60.5" y2="108" stroke="#2B2F36" stroke-width="1" stroke-linecap="butt"/>
+    <rect id="Body" x="50.5" y="40.5" width="20" height="49" fill="#2B2F36" stroke="#2B2F36" stroke-width="1"/>
+  </g>
+</svg>
