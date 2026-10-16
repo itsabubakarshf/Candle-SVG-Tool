@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ACTIVE_KEY, PRESETS_KEY, loadUserPresets } from '@/lib/presets/storage';
-import { BUILT_IN_PRESETS, DARK_ID, LIGHT_ID, ORIGINAL_ID } from '@/lib/presets/builtins';
+import { BUILT_IN_PRESETS, LIGHT_ID, MO_ID, ORIGINAL_ID } from '@/lib/presets/builtins';
 import type { SourceStyle } from '@/lib/detect/types';
 import { resolvePreset } from '@/store/resolvePreset';
 import { selectActivePreset, usePresetStore } from '@/store/presetStore';
@@ -36,10 +36,10 @@ afterEach(() => {
 });
 
 describe('preset store', () => {
-  beforeEach(() => s().setActive(LIGHT_ID)); // these tests edit the Light preset
+  beforeEach(() => s().setActive(LIGHT_ID)); // these tests edit the Abbi preset
 
   it('starts with both built-ins', () => {
-    expect(s().presets.map((p) => p.name)).toEqual(['Light', 'Dark', 'Mo']);
+    expect(s().presets.map((p) => p.name)).toEqual(['Abbi', 'Mo']);
     expect(selectActivePreset(s()).id).toBe(LIGHT_ID); // active in this block
   });
 
@@ -56,15 +56,15 @@ describe('preset store', () => {
     const saved = s().saveDraft()!;
     expect(saved.builtIn).toBe(false);
     expect(saved.id).not.toBe(LIGHT_ID);
-    expect(saved.name).toBe('Light copy');
+    expect(saved.name).toBe('Abbi copy');
     expect(s().presets.find((p) => p.id === LIGHT_ID)!.bull.body).toBe('#FFFFFF');
     expect(s().activeId).toBe(saved.id);
   });
 
-  it('a built-in saved under a new name keeps that name; Dark becomes "Dark copy"', () => {
-    s().setActive(DARK_ID);
+  it('a built-in saved under a new name keeps that name; Mo becomes "Mo copy"', () => {
+    s().setActive(MO_ID);
     s().editDraft({ borderWidth: 2 });
-    expect(s().saveDraft()!.name).toBe('Dark copy');
+    expect(s().saveDraft()!.name).toBe('Mo copy');
     s().setActive(LIGHT_ID);
     s().editDraft({ name: 'Mine' });
     expect(s().saveDraft()!.name).toBe('Mine');
@@ -83,8 +83,8 @@ describe('preset store', () => {
 
   it('cannot delete built-in presets', () => {
     expect(s().remove(LIGHT_ID)).toBe(false);
-    expect(s().remove(DARK_ID)).toBe(false);
-    expect(s().presets.length).toBe(3);
+    expect(s().remove(MO_ID)).toBe(false);
+    expect(s().presets.length).toBe(2);
   });
 
   it('keeps names unique', () => {
@@ -115,21 +115,21 @@ describe('AC-5: saved presets and the active preset survive a reload', () => {
     expect(s().activeId).toBe(saved.id);
     expect(selectActivePreset(s()).name).toBe('Mine');
     expect(selectActivePreset(s()).borderWidth).toBe(2);
-    expect(s().presets.length).toBe(4);
+    expect(s().presets.length).toBe(3);
   });
 
   it('remembers switching to a built-in too', () => {
-    s().setActive(DARK_ID);
+    s().setActive(MO_ID);
     reload();
     s().hydrate();
-    expect(s().activeId).toBe(DARK_ID);
+    expect(s().activeId).toBe(MO_ID);
   });
 
   it('loads the built-ins when storage is empty, corrupt or missing', () => {
     data[PRESETS_KEY] = '{{{';
     data[ACTIVE_KEY] = 'does-not-exist';
     s().hydrate();
-    expect(s().presets.length).toBe(3);
+    expect(s().presets.length).toBe(2);
     expect(s().activeId).toBe(ORIGINAL_ID);
     delete (globalThis as { window?: unknown }).window;
     expect(() => s().hydrate()).not.toThrow();
@@ -218,7 +218,7 @@ describe('Original colours (the default: keep the uploaded chart as it is)', () 
     expect(p.background).toBe('#131722');
   });
 
-  it('uses the Light colours only for a type the screenshot does not have', () => {
+  it('uses the Abbi colours only for a type the screenshot does not have', () => {
     const p = resolvePreset(s(), { ...SOURCE, bear: null });
     expect(p.bull).toEqual(SOURCE.bull);
     expect(p.bear).toEqual(BUILT_IN_PRESETS[0]!.bear);
@@ -226,8 +226,8 @@ describe('Original colours (the default: keep the uploaded chart as it is)', () 
   });
 
   it('a chosen preset replaces it, and choosing Original again brings it back', () => {
-    s().setActive(DARK_ID);
-    expect(resolvePreset(s(), SOURCE).id).toBe(DARK_ID);
+    s().setActive(MO_ID);
+    expect(resolvePreset(s(), SOURCE).id).toBe(MO_ID);
     s().setActive(ORIGINAL_ID);
     expect(resolvePreset(s(), SOURCE).id).toBe(ORIGINAL_ID);
   });

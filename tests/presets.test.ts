@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DARK_PRESET, LIGHT_PRESET, MO_PRESET, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
+import { LIGHT_PRESET, MO_PRESET, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
 import {
   ACTIVE_KEY,
   PRESETS_KEY,
@@ -48,13 +48,12 @@ const custom: Preset = {
 
 describe('built-in presets', () => {
   it('ship "Light" with the default values from the spec, and a dark mirror', () => {
-    expect(LIGHT_PRESET.name).toBe('Light');
+    expect(LIGHT_PRESET.name).toBe('Abbi');
     expect(LIGHT_PRESET.bull).toEqual({ body: '#FFFFFF', border: '#2B2F36', wick: '#2B2F36' });
     expect(LIGHT_PRESET.bear).toEqual({ body: '#2B2F36', border: '#2B2F36', wick: '#2B2F36' });
     expect(LIGHT_PRESET.borderWidth).toBe(1);
     expect(LIGHT_PRESET.wickWidth).toBe(1);
     expect(LIGHT_PRESET.background).toBeNull();
-    expect(DARK_PRESET.name).toBe('Dark');
     expect(BUILT_IN_PRESETS.every((p) => p.builtIn)).toBe(true);
   });
 

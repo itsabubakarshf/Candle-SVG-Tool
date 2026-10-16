@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Candle } from '@/lib/detect/types';
-import { DARK_PRESET, LIGHT_PRESET } from '@/lib/presets/builtins';
+import { LIGHT_PRESET, MO_PRESET } from '@/lib/presets/builtins';
 import { buildSvg, fmt } from '@/lib/svg/buildSvg';
 import { originalPreset } from '@/lib/presets/original';
 import { candleColors } from '@/lib/svg/geometry';
@@ -144,8 +144,8 @@ describe('buildSvg details', () => {
   it('uses the preset colours for bear candles and for another preset', () => {
     const bear = buildSvg([candle({ type: 'bear' })], LIGHT_PRESET, SIZE);
     expect(bear).toContain('fill="#2B2F36" stroke="#2B2F36"');
-    const dark = buildSvg([candle()], DARK_PRESET, SIZE);
-    expect(dark).toContain('fill="#14161A" stroke="#E6E8EC"');
+    const mo = buildSvg([candle()], MO_PRESET, SIZE);
+    expect(mo).toContain('fill="#F4F4F4" stroke="#B0B0B0"');
   });
 
   it('applies a per-candle override to that candle only', () => {

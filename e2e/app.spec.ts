@@ -397,7 +397,7 @@ test.describe('presets (AC-5)', () => {
     page,
   }) => {
     await loadSample(page);
-    await page.getByLabel('Active preset').selectOption({ label: 'Light' });
+    await page.getByLabel('Active preset').selectOption({ label: 'Abbi' });
     await page.getByRole('tab', { name: 'Colors' }).click();
     await page
       .getByRole('group', { name: 'bull' })
@@ -410,13 +410,13 @@ test.describe('presets (AC-5)', () => {
     await expect.poll(bodyFill).toBe('#FFFFFF');
   });
 
-  test('built-ins cannot be deleted; switching to Dark changes the export', async ({ page }) => {
+  test('built-ins cannot be deleted; switching to Mo changes the export', async ({ page }) => {
     await loadSample(page);
     await page.getByRole('tab', { name: 'Colors' }).click();
     await expect(page.getByRole('button', { name: 'Delete' })).toBeDisabled();
-    await page.getByLabel('Active preset').selectOption({ label: 'Dark' });
+    await page.getByLabel('Active preset').selectOption({ label: 'Mo' });
     const svg = await copiedSvg(page);
-    expect(svg).toContain('#E6E8EC');
+    expect(svg).toContain('#B0B0B0');
     expect(svg).not.toContain('#2B2F36');
   });
 
@@ -501,7 +501,7 @@ test.describe('Original colours: the chart keeps the colours it was uploaded wit
     await expect(found).toContainText(BEAR_FILL);
     await expect(found).toContainText(LINE);
     // pick a preset: the SVG is restyled; pick Original again: the chart's colours return
-    await page.getByLabel('Active preset').selectOption({ label: 'Light' });
+    await page.getByLabel('Active preset').selectOption({ label: 'Abbi' });
     let svg = await copiedSvg(page);
     expect(svg).toContain('#2B2F36');
     expect(svg).not.toContain(BULL_FILL);
@@ -516,9 +516,9 @@ test.describe('Original colours: the chart keeps the colours it was uploaded wit
     browser,
   }) => {
     await loadSample(page);
-    await page.getByLabel('Active preset').selectOption({ label: 'Dark' });
+    await page.getByLabel('Active preset').selectOption({ label: 'Mo' });
     await page.reload();
-    await expect(page.getByLabel('Active preset').locator('option:checked')).toHaveText('Dark');
+    await expect(page.getByLabel('Active preset').locator('option:checked')).toHaveText('Mo');
     const fresh = await browser.newContext();
     const other = await fresh.newPage();
     await other.goto('/');

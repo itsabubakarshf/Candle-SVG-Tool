@@ -368,7 +368,7 @@ function OriginalPanel({
             Save as preset
           </Button>
           <p className="text-xs text-muted-foreground">
-            Want different colours? Pick Light, Dark or your own preset above, or save these as a
+            Want different colours? Pick Abbi, Mo or your own preset above, or save these as a
             preset and edit it. A single odd candle keeps its own colour too.
           </p>
         </>
