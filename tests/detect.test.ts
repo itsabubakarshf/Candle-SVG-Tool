@@ -392,6 +392,22 @@ describe('Confidence (FR-17)', () => {
   });
 });
 
+describe('Flat candles (FR-6, FR-17)', () => {
+  it('flags a flat candle whose type cannot be known from a plain line', () => {
+    const { image } = renderChart(
+      layout([body('bull', 200, 200, 150, 260), body('bull', 100, 180, 70, 200)], {
+        style: ABBI_LIGHT,
+        pitch: 40,
+        height: 300,
+      }),
+    );
+    const [flat, normal] = detectCandles(image, noUniform);
+    expect(flat!.isDoji).toBe(true);
+    expect(flat!.confidence).toBeLessThan(0.7);
+    expect(normal!.confidence).toBeGreaterThanOrEqual(0.9);
+  });
+});
+
 describe('Edge cases', () => {
   it('returns no candles for a blank image', () => {
     const { image } = renderChart({ width: 100, height: 100, candles: [], style: ABBI_LIGHT });

@@ -16,6 +16,6 @@ export function confidenceScore(i: ConfidenceInputs): number {
     score -= Math.min(0.4, 0.15 + 0.1 * (i.wickOffset - 1));
   }
   if (i.split) score -= 0.2;
-  if (i.unclearColour) score -= 0.25;
+  if (i.unclearColour) score -= 0.35;
   return Math.max(0, Math.min(1, score));
 }
