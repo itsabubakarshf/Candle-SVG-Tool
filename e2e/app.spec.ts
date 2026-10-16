@@ -532,13 +532,51 @@ test.describe('device scaling (NFR-6, AC-2)', () => {
 });
 
 test.describe('look and layout (NFR-8)', () => {
-  test.describe('dark mode', () => {
+  test.describe('dark system setting', () => {
     test.use({ colorScheme: 'dark' });
-    test('follows the system dark setting', async ({ page }) => {
+    test('follows the system dark setting by default', async ({ page }) => {
       await loadSample(page);
       const bg = await page.evaluate(() => getComputedStyle(document.body).backgroundColor);
       expect(bg).toBe('rgb(14, 16, 19)');
     });
+
+    test('the Light theme switch gives a white app even when the system is dark', async ({
+      page,
+    }) => {
+      await page.goto('/');
+      await page.getByRole('radio', { name: 'Light theme' }).click();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+        'rgb(255, 255, 255)',
+      );
+      // and the choice is remembered, with no flash of the dark theme on reload
+      await page.reload();
+      await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+      await expect(page.getByRole('radio', { name: 'Light theme' })).toHaveAttribute(
+        'aria-checked',
+        'true',
+      );
+      await page.getByRole('radio', { name: 'Match system theme' }).click();
+      await expect(page.locator('html')).not.toHaveAttribute('data-theme', /.*/);
+      expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+        'rgb(14, 16, 19)',
+      );
+    });
+  });
+
+  test('the Dark theme switch works on a light system and is remembered', async ({ page }) => {
+    await page.goto('/');
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+      'rgb(255, 255, 255)',
+    );
+    await page.getByRole('radio', { name: 'Dark theme' }).click();
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+      'rgb(14, 16, 19)',
+    );
+    await page.reload();
+    expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBe(
+      'rgb(14, 16, 19)',
+    );
   });
 
   test('light mode uses a white page', async ({ page }) => {
