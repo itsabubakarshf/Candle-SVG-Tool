@@ -5,7 +5,7 @@ import { afterAll, describe, expect, it } from 'vitest';
 import { detect, detectCandles } from '@/lib/detect';
 import { DEFAULT_SETTINGS, type DetectSettings, type PixelImage } from '@/lib/detect/types';
 import {
-  ABBI_LIGHT,
+  HOLLOW_STYLE,
   TV_DEFAULT,
   blur,
   jpegRoundTrip,
@@ -116,7 +116,7 @@ const abbi = layout(
     body('bear', 349.5, 442.5, 326.5, 514.5, 45),
     body('bull', 125.5, 437.5, 72.5, 446.5, 45),
   ],
-  { style: ABBI_LIGHT, pitch: 57, height: 547 },
+  { style: HOLLOW_STYLE, pitch: 57, height: 547 },
 );
 runCase('Abbi hollow bull + dark bear', abbi, ALL);
 
@@ -131,7 +131,7 @@ runCase(
       body('bear', 250, 250, 220, null),
       body('bull', 280.3, 281.3, null, 330),
     ],
-    { style: ABBI_LIGHT, pitch: 40, height: 400 },
+    { style: HOLLOW_STYLE, pitch: 40, height: 400 },
   ),
   NO_RESIZE,
   DEFAULT_SETTINGS,
@@ -160,7 +160,7 @@ runCase(
       body('bear', 200.5, 203.5, 40, 370),
       body('bull', 250, 255.5, 30, 360, 17),
     ],
-    { style: ABBI_LIGHT, pitch: 40, height: 400 },
+    { style: HOLLOW_STYLE, pitch: 40, height: 400 },
   ),
   ALL,
   noUniform,
@@ -176,7 +176,7 @@ runCase(
       body('bull', 140, 210, null, null),
       body('bear', 90, 150, 60, 190),
     ],
-    { style: ABBI_LIGHT, pitch: 40, height: 300 },
+    { style: HOLLOW_STYLE, pitch: 40, height: 300 },
   ),
   ALL,
 );
@@ -191,7 +191,7 @@ runCase(
       body('bull', 90, 150, 60, 180, 5),
       body('bear', 110, 165, 80, 195, 3),
     ],
-    { style: ABBI_LIGHT, pitch: 12, height: 260 },
+    { style: HOLLOW_STYLE, pitch: 12, height: 260 },
   ),
   NO_BLUR,
   noUniform,
@@ -199,7 +199,7 @@ runCase(
 runCase(
   'Wide candles (60+ px)',
   layout([body('bull', 100, 220, 40, 270, 61), body('bear', 140, 240, 90, 300, 73)], {
-    style: ABBI_LIGHT,
+    style: HOLLOW_STYLE,
     pitch: 100,
     height: 340,
   }),
@@ -216,7 +216,7 @@ runCase(
       body('bear', 130, 190, 90, 220, 21),
       body('bull', 120, 175, 80, 210, 21),
     ],
-    { style: ABBI_LIGHT, pitch: 22, height: 280 },
+    { style: HOLLOW_STYLE, pitch: 22, height: 280 },
   ),
   NO_BLUR,
 );
@@ -228,14 +228,14 @@ runCase(
       body('bull', 140, 170, 120, 200, 21),
       body('bull', 90, 150, 70, 190, 21),
     ],
-    { style: ABBI_LIGHT, pitch: 21, height: 280 },
+    { style: HOLLOW_STYLE, pitch: 21, height: 280 },
   ),
   NO_BLUR,
 );
 runCase(
   'Touching candles (solid, same height)',
   layout([body('bear', 100, 180, 60, 220, 20), body('bear', 100, 180, 70, 210, 20)], {
-    style: ABBI_LIGHT,
+    style: HOLLOW_STYLE,
     pitch: 20,
     height: 280,
   }),
@@ -261,7 +261,7 @@ runCase(
 
 // ------------------------------------------------------------------ 8. 1 to 40 candles
 for (const n of [1, 5, 40]) {
-  runCase(`${n} candle(s), Abbi style`, randomChart(n, 100 + n, ABBI_LIGHT), [
+  runCase(`${n} candle(s), Abbi style`, randomChart(n, 100 + n, HOLLOW_STYLE), [
     'clean',
     'x125',
     'jpeg',
@@ -329,7 +329,7 @@ describe('Uniform body width (FR-5)', () => {
       body('bear', 120, 180, 90, 200, 25),
       body('bull', 90, 150, 60, 180, 23),
     ],
-    { style: ABBI_LIGHT, pitch: 40, height: 260 },
+    { style: HOLLOW_STYLE, pitch: 40, height: 260 },
   );
   const { image, truth } = renderChart(chart);
 
@@ -364,7 +364,7 @@ describe('Classification', () => {
   it('"Light body = bull" OFF flips the neutral rule', () => {
     const { image } = renderChart(
       layout([body('bear', 100, 160, 70, 190), body('bull', 120, 180, 90, 200)], {
-        style: ABBI_LIGHT,
+        style: HOLLOW_STYLE,
         pitch: 40,
         height: 260,
       }),
@@ -383,7 +383,7 @@ describe('Confidence (FR-17)', () => {
         body('bull', 90, 150, 60, 180, 20),
         body('bear', 110, 170, 80, 190, 40),
       ],
-      { style: ABBI_LIGHT, pitch: 50, height: 260 },
+      { style: HOLLOW_STYLE, pitch: 50, height: 260 },
     );
     const { image } = renderChart(chart);
     const candles = detectCandles(image);
@@ -396,7 +396,7 @@ describe('Flat candles (FR-6, FR-17)', () => {
   it('flags a flat candle whose type cannot be known from a plain line', () => {
     const { image } = renderChart(
       layout([body('bull', 200, 200, 150, 260), body('bull', 100, 180, 70, 200)], {
-        style: ABBI_LIGHT,
+        style: HOLLOW_STYLE,
         pitch: 40,
         height: 300,
       }),
@@ -410,7 +410,7 @@ describe('Flat candles (FR-6, FR-17)', () => {
 
 describe('Edge cases', () => {
   it('returns no candles for a blank image', () => {
-    const { image } = renderChart({ width: 100, height: 100, candles: [], style: ABBI_LIGHT });
+    const { image } = renderChart({ width: 100, height: 100, candles: [], style: HOLLOW_STYLE });
     expect(detectCandles(image)).toEqual([]);
   });
 
@@ -422,7 +422,7 @@ describe('Edge cases', () => {
   });
 
   it('runs fast on a large image (NFR-2)', () => {
-    const chart = randomChart(40, 7, ABBI_LIGHT, 20, 48);
+    const chart = randomChart(40, 7, HOLLOW_STYLE, 20, 48);
     const big: SynthChart = { ...chart, width: 2000, height: 1200 };
     const { image } = renderChart(big);
     detect(image); // warm up

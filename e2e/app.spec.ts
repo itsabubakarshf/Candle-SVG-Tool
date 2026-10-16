@@ -10,13 +10,15 @@ import {
   pngBuffer,
   simpleChart,
 } from './helpers';
-import { ABBI_LIGHT, renderChart } from '../tests/synth/generate';
+import { HOLLOW_STYLE, renderChart } from '../tests/synth/generate';
 
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
 test.describe('loading a screenshot', () => {
   test('empty state offers paste, drop or click, and Copy SVG is off', async ({ page }) => {
     await page.goto('/');
+    await expect(page).toHaveTitle('Crisper');
+    await expect(page.getByRole('heading', { name: 'Crisper', level: 1 })).toBeVisible();
     await expect(page.getByText('Paste (Ctrl+V), drop, or click to upload.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Copy SVG' }).first()).toBeDisabled();
   });
@@ -102,7 +104,7 @@ test.describe('loading a screenshot', () => {
   });
 
   test('an image with no candles gets a clear error and nothing to copy', async ({ page }) => {
-    const blank = pngBuffer({ width: 120, height: 120, candles: [], style: ABBI_LIGHT });
+    const blank = pngBuffer({ width: 120, height: 120, candles: [], style: HOLLOW_STYLE });
     await loadBuffer(page, blank, 'blank.png');
     await expect(page.getByRole('alert').filter({ hasText: 'No candles found' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Copy SVG' }).first()).toBeDisabled();
@@ -396,13 +398,11 @@ test.describe('presets (AC-5)', () => {
     await expect.poll(bodyFill).toBe('#FFFFFF');
   });
 
-  test('built-ins cannot be deleted; switching to Abbi Dark changes the export', async ({
-    page,
-  }) => {
+  test('built-ins cannot be deleted; switching to Dark changes the export', async ({ page }) => {
     await loadSample(page);
     await page.getByRole('tab', { name: 'Colors' }).click();
     await expect(page.getByRole('button', { name: 'Delete' })).toBeDisabled();
-    await page.getByLabel('Active preset').selectOption({ label: 'Abbi Dark' });
+    await page.getByLabel('Active preset').selectOption({ label: 'Dark' });
     const svg = await copiedSvg(page);
     expect(svg).toContain('#E6E8EC');
     expect(svg).not.toContain('#2B2F36');
@@ -626,7 +626,7 @@ test.describe('look and layout (NFR-8)', () => {
 test.describe('large images', () => {
   test('a 40-candle 2000 x 1200 chart is detected without freezing the page', async ({ page }) => {
     const { randomChart } = await import('../tests/synth/generate');
-    const chart = { ...randomChart(40, 7, ABBI_LIGHT, 20, 48), width: 2000, height: 1200 };
+    const chart = { ...randomChart(40, 7, HOLLOW_STYLE, 20, 48), width: 2000, height: 1200 };
     const png = pngBuffer(chart);
     await loadBuffer(page, png, 'big.png');
     await expect(page.getByTestId('candle-count')).toHaveText('40 candles', { timeout: 15000 });

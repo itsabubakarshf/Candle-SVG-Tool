@@ -2,7 +2,7 @@ import path from 'node:path';
 import { expect, type Page } from '@playwright/test';
 import { PNG } from 'pngjs';
 import {
-  ABBI_LIGHT,
+  HOLLOW_STYLE,
   layout,
   renderChart,
   type SynthCandle,
@@ -28,7 +28,7 @@ export function simpleChart(widths: number[]): SynthChart {
     wickBottom: 190,
     bodyWidth: w,
   }));
-  return layout(specs, { style: ABBI_LIGHT, pitch: 50, height: 260 });
+  return layout(specs, { style: HOLLOW_STYLE, pitch: 50, height: 260 });
 }
 
 export async function loadSample(page: Page): Promise<void> {

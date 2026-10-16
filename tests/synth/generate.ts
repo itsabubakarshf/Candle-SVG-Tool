@@ -71,8 +71,8 @@ export interface Rendered {
 
 // ---------------------------------------------------------------- styles
 
-/** Abbi's style: hollow (white) bull, dark bear, thin dark borders. */
-export const ABBI_LIGHT: SynthStyle = {
+/** Hollow (white) bull, dark bear, thin dark borders. */
+export const HOLLOW_STYLE: SynthStyle = {
   background: [255, 255, 255],
   bull: { fill: [252, 252, 254], border: [43, 47, 54], wick: [43, 47, 54] },
   bear: { fill: [43, 47, 54], border: [43, 47, 54], wick: [43, 47, 54] },
