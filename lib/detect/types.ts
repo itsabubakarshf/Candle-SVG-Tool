@@ -114,6 +114,8 @@ export interface TextExtra {
   text: string;
   /** Font size in pixels. */
   size: number;
+  /** Font weight (400 regular, 500 medium, 600 semi-bold, 700 bold), judged from the stems. */
+  weight?: number;
   color: string;
   /** Where the label sits now (it follows the label when it is moved). */
   region: { x: number; y: number; width: number; height: number };

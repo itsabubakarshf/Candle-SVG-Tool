@@ -85,6 +85,21 @@ describe('real screenshots with a box, a line and a label', () => {
   });
 });
 
+describe('the screenshot with the crosshair (as originally uploaded)', () => {
+  const r = detect(load('extras-d.png'));
+
+  it('keeps one look for all candles: the same dark lines on bull and bear', () => {
+    expect(r.sourceStyle.bull?.border).toBe('#393939');
+    expect(r.sourceStyle.bull?.wick).toBe('#393939');
+    expect(r.sourceStyle.bear?.border).toBe('#393939');
+    expect(r.sourceStyle.bear?.wick).toBe('#393939');
+    expect(r.sourceStyle.borderWidth).toBe(1);
+    expect(r.sourceStyle.wickWidth).toBe(1);
+    // no candle has colours of its own: nothing is changed per candle
+    expect(r.candles.filter((c) => c.sourceColors)).toHaveLength(0);
+  });
+});
+
 describe('third screenshot: a slanted line that touches a wick, a label beside a candle', () => {
   const r = detect(load('extras-c.png'));
 
@@ -112,6 +127,15 @@ describe('third screenshot: a slanted line that touches a wick, a label beside a
     expect(dotted).toHaveLength(1);
     expect((dotted[0] as LineExtra).width).toBe(1);
     expect(lines(r).filter((l) => Math.abs(l.x1 - l.x2) < 0.01)).toHaveLength(1); // the tick on the left edge
+  });
+
+  it('keeps the label as it looks: colour, size and weight (the original is semi-bold)', () => {
+    const label = texts(r)[0] as TextExtra;
+    expect(label.color).toBe('#191919');
+    expect(label.size).toBe(10);
+    expect(label.weight).toBe(600);
+    // the thin grey label of the second screenshot stays regular
+    expect((texts(detect(load('extras-b.png')))[0] as TextExtra).weight).toBe(400);
   });
 
   it('finds the label even though its letters touch, and keeps how it looks', () => {

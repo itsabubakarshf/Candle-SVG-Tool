@@ -42,11 +42,16 @@ export function lineSvg(l: LineExtra, index: number): string {
   return `    <line id="Line ${pad(index + 1)}" x1="${fmt(l.x1)}" y1="${fmt(l.y1)}" x2="${fmt(l.x2)}" y2="${fmt(l.y2)}" stroke="${l.color}" stroke-width="${fmt(l.width)}" stroke-linecap="butt"${dash}/>`;
 }
 
+/** font-weight only when it is not the normal one */
+export function weightAttr(t: TextExtra): string {
+  return t.weight && t.weight !== 400 ? ` font-weight="${t.weight}"` : '';
+}
+
 export function textSvg(t: TextExtra, index: number): string {
   if (t.text.trim() === '' && t.trace) {
     return `    <path id="Label ${pad(index + 1)} (not read)" d="${t.trace}" fill="${t.color}"/>`;
   }
-  return `    <text id="Label ${pad(index + 1)}" x="${fmt(t.x)}" y="${fmt(t.y)}" font-family="${LABEL_FONT}" font-size="${fmt(t.size)}" fill="${t.color}">${escapeXml(t.text)}</text>`;
+  return `    <text id="Label ${pad(index + 1)}" x="${fmt(t.x)}" y="${fmt(t.y)}" font-family="${LABEL_FONT}" font-size="${fmt(t.size)}"${weightAttr(t)} fill="${t.color}">${escapeXml(t.text)}</text>`;
 }
 
 /** Boxes go behind the candles. */

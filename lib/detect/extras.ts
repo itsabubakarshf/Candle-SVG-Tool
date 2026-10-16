@@ -661,6 +661,54 @@ export function tracePixels(pixels: number[], width: number): string {
     .join('');
 }
 
+/**
+ * How heavy the letters are, from the width of their vertical stems relative to their height.
+ * (Inter: regular stems are about 0.13 of the capital height, semi-bold about 0.19.)
+ */
+export function estimateWeight(
+  pixels: number[],
+  ink: Float32Array,
+  width: number,
+  peak: number,
+  capHeight: number,
+): number {
+  const cov = new Map<number, number>();
+  for (const p of pixels) {
+    const c = Math.min(1, (ink[p] as number) / Math.max(1, peak));
+    if (c > 0.2) cov.set(p, c);
+  }
+  const rows = new Map<number, number[]>();
+  for (const p of cov.keys()) {
+    const y = Math.floor(p / width);
+    const list = rows.get(y);
+    if (list) list.push(p % width);
+    else rows.set(y, [p % width]);
+  }
+  const stems: number[] = [];
+  for (const [y, xs] of rows) {
+    xs.sort((a, b) => a - b);
+    let run: number[] = [xs[0] as number];
+    const flush = () => {
+      // only narrow runs are stems; wide ones are the horizontal strokes of the letters
+      if (run.length <= 3) {
+        stems.push(run.reduce((sum, x) => sum + (cov.get(y * width + x) as number), 0));
+      }
+    };
+    for (const x of xs.slice(1)) {
+      if (x === (run[run.length - 1] as number) + 1) run.push(x);
+      else {
+        flush();
+        run = [x];
+      }
+    }
+    flush();
+  }
+  if (stems.length < 4 || capHeight < 5) return 400;
+  stems.sort((a, b) => a - b);
+  const ratio = (stems[Math.floor(stems.length / 2)] as number) / capHeight;
+  return ratio <= 0.135 ? 400 : ratio <= 0.16 ? 500 : ratio <= 0.19 ? 600 : 700;
+}
+
 /** A "line" that runs along a candle's own edge or wick is that candle, not a separate line. */
 function isCandleEdge(l: LineExtra, candles: CandleExtent[]): boolean {
   const len = Math.hypot(l.x2 - l.x1, l.y2 - l.y1);
@@ -1146,6 +1194,7 @@ export function findExtras(
       y: baseline,
       text: '',
       size: Math.max(6, Math.round(cap / 0.716)),
+      weight: estimateWeight(pix, ink, width, peak, cap),
       color: rgbToHex([col[0] / n, col[1] / n, col[2] / n]),
       region: { x: g.x0, y: g.y0, width: g.x1 - g.x0 + 1, height: gh },
       from: { x: g.x0, y: g.y0, width: g.x1 - g.x0 + 1, height: gh },

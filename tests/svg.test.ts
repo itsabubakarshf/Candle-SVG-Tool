@@ -274,6 +274,13 @@ describe('extras in the SVG', () => {
     expect(svg).toContain('>A&amp;B &lt;1&gt;</text>');
   });
 
+  it('the weight is written only when it is not regular', () => {
+    const bold = buildSvg([candle()], LIGHT_PRESET, SIZE, { extras: [text({ weight: 600 })] });
+    expect(bold).toContain('font-size="10" font-weight="600" fill="#191919"');
+    const regular = buildSvg([candle()], LIGHT_PRESET, SIZE, { extras: [text({ weight: 400 })] });
+    expect(regular).not.toContain('font-weight');
+  });
+
   it('a label nobody has typed yet is kept as the traced letters, then replaced by the text', () => {
     const traced = text({ text: '', unread: true, trace: 'M0 0h2v2h-2z' });
     const before = buildSvg([candle()], LIGHT_PRESET, SIZE, { extras: [traced] });

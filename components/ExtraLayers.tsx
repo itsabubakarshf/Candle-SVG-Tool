@@ -434,6 +434,7 @@ function LabelEditor({ label }: { label: TextExtra }) {
           boxSizing: 'border-box',
           fontFamily: LABEL_FONT,
           fontSize: label.size,
+          fontWeight: label.weight ?? 400,
           lineHeight: 1.15,
           padding: '0 2px',
           color: '#111',
