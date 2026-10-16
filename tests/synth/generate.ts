@@ -326,3 +326,97 @@ export function randomChart(
   }
   return layout(specs, { style, pitch, height: 600 });
 }
+
+// ---------------------------------------------------------------- extra content on a chart
+// What a trader may leave on a screenshot: grid and level lines, boxes, labels, a watermark.
+
+function blendPixel(image: PixelImage, x: number, y: number, color: Rgb, alpha: number): void {
+  if (x < 0 || y < 0 || x >= image.width || y >= image.height) return;
+  const i = (y * image.width + x) * 4;
+  for (let c = 0; c < 3; c++) {
+    image.data[i + c] = Math.round((image.data[i + c] as number) * (1 - alpha) + color[c]! * alpha);
+  }
+}
+
+export interface LineOptions {
+  /** Axis-aligned: x0 = x1 for a vertical line, y0 = y1 for a horizontal one. */
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  color: Rgb;
+  alpha?: number;
+  width?: number;
+  /** [on, off] pixels, for dotted or dashed lines. */
+  dash?: [number, number];
+}
+
+export function overlayLine(image: PixelImage, o: LineOptions): void {
+  const horizontal = o.y0 === o.y1;
+  const length = horizontal ? Math.abs(o.x1 - o.x0) : Math.abs(o.y1 - o.y0);
+  const start = horizontal ? Math.min(o.x0, o.x1) : Math.min(o.y0, o.y1);
+  const w = o.width ?? 1;
+  for (let t = 0; t <= length; t++) {
+    if (o.dash && t % (o.dash[0] + o.dash[1]) >= o.dash[0]) continue;
+    for (let k = 0; k < w; k++) {
+      if (horizontal) blendPixel(image, start + t, o.y0 + k, o.color, o.alpha ?? 1);
+      else blendPixel(image, o.x0 + k, start + t, o.color, o.alpha ?? 1);
+    }
+  }
+}
+
+/** A semi-transparent box (an SMT gap, an FVG, a range). Drawn over whatever is there. */
+export function overlayBox(
+  image: PixelImage,
+  b: { x0: number; y0: number; x1: number; y1: number; color: Rgb; alpha: number },
+): void {
+  for (let y = b.y0; y < b.y1; y++)
+    for (let x = b.x0; x < b.x1; x++) blendPixel(image, x, y, b.color, b.alpha);
+}
+
+// 3 x 5 digits and a dot
+const GLYPHS: Record<string, string[]> = {
+  '0': ['111', '101', '101', '101', '111'],
+  '1': ['010', '110', '010', '010', '111'],
+  '2': ['111', '001', '111', '100', '111'],
+  '3': ['111', '001', '111', '001', '111'],
+  '4': ['101', '101', '111', '001', '001'],
+  '5': ['111', '100', '111', '001', '111'],
+  '6': ['111', '100', '111', '101', '111'],
+  '7': ['111', '001', '001', '001', '001'],
+  '8': ['111', '101', '111', '101', '111'],
+  '9': ['111', '101', '111', '001', '111'],
+  '.': ['000', '000', '000', '000', '010'],
+};
+
+/** Digit text such as a price label. `scale` 2 gives 6 x 10 px digits. */
+export function overlayText(
+  image: PixelImage,
+  text: string,
+  x: number,
+  y: number,
+  o: { color: Rgb; alpha?: number; scale?: number },
+): void {
+  const s = o.scale ?? 2;
+  let cx = x;
+  for (const ch of text) {
+    const g = GLYPHS[ch];
+    if (g) {
+      g.forEach((row, ry) => {
+        [...row].forEach((bit, rx) => {
+          if (bit !== '1') return;
+          for (let dy = 0; dy < s; dy++) {
+            for (let dx = 0; dx < s; dx++)
+              blendPixel(image, cx + rx * s + dx, y + ry * s + dy, o.color, o.alpha ?? 1);
+          }
+        });
+      });
+    }
+    cx += 4 * s;
+  }
+}
+
+/** A copy of the image, so overlays do not change the original. */
+export function copyImage(image: PixelImage): PixelImage {
+  return { width: image.width, height: image.height, data: new Uint8ClampedArray(image.data) };
+}

@@ -77,6 +77,8 @@ export interface SourceStyle {
   background: string;
 }
 
+import type { CleanReport } from './clean';
+
 export interface DetectionResult {
   candles: Candle[];
   background: Rgb;
@@ -87,4 +89,6 @@ export interface DetectionResult {
   /** Measured wick thickness, in source pixels. */
   sourceWickWidth: number | null;
   sourceStyle: SourceStyle;
+  /** Whether the image holds only candles. Lines, shapes or text make it "not clean". */
+  cleanliness: CleanReport;
 }

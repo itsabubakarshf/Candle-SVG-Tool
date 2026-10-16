@@ -3,6 +3,7 @@ import { rgbToHex } from '@/lib/svg/hex';
 import { median, measureCluster, type Measured } from './measure';
 import { findBackground } from './background';
 import { classifyCandles, sampleInterior } from './classify';
+import { checkClean, stripLongLines } from './clean';
 import { confidenceScore } from './confidence';
 import { colourMaps } from './coverage';
 import { segmentColumns } from './segment';
@@ -30,21 +31,27 @@ export function detect(
 ): DetectionResult {
   const { width, height } = image;
   const background = findBackground(image);
-  const { de, dl } = colourMaps(image, background);
-  const clusters = segmentColumns(de, width, height, settings);
-
-  const measured: Measured[] = [];
-  clusters.forEach((c, i) => {
-    const prev = clusters[i - 1];
-    const next = clusters[i + 1];
-    const gapLeft = prev ? c.left - prev.right - 1 : c.left;
-    const gapRight = next ? next.left - c.right - 1 : width - 1 - c.right;
-    // Take a little margin for blurred edge pixels, but never cross into a neighbour.
-    const x0 = Math.max(0, c.left - Math.min(2, Math.floor(gapLeft / 2)));
-    const x1 = Math.min(width - 1, c.right + Math.min(2, Math.floor(gapRight / 2)));
-    const m = measureCluster(de, dl, width, height, x0, x1, c.split, settings, image, background);
-    if (m) measured.push(m);
-  });
+  const raw = colourMaps(image, background);
+  const read = (de: Float32Array, dl: Float32Array): Measured[] => {
+    const clusters = segmentColumns(de, width, height, settings);
+    const out: Measured[] = [];
+    clusters.forEach((c, i) => {
+      const prev = clusters[i - 1];
+      const next = clusters[i + 1];
+      const gapLeft = prev ? c.left - prev.right - 1 : c.left;
+      const gapRight = next ? next.left - c.right - 1 : width - 1 - c.right;
+      // Take a little margin for blurred edge pixels, but never cross into a neighbour.
+      const x0 = Math.max(0, c.left - Math.min(2, Math.floor(gapLeft / 2)));
+      const x1 = Math.min(width - 1, c.right + Math.min(2, Math.floor(gapRight / 2)));
+      const m = measureCluster(de, dl, width, height, x0, x1, c.split, settings, image, background);
+      if (m) out.push(m);
+    });
+    return out;
+  };
+  // A strong line across the chart joins all the candles into one: take it out first.
+  const stripped = stripLongLines(raw.de, raw.dl, width, height);
+  const { de, dl } = stripped;
+  const measured = read(de, dl);
 
   if (measured.length === 0) {
     return {
@@ -53,6 +60,7 @@ export function detect(
       medianBodyWidth: null,
       sourceBorderWidth: null,
       sourceWickWidth: null,
+      cleanliness: { clean: true, issues: [] },
       sourceStyle: {
         bull: null,
         bear: null,
@@ -147,6 +155,15 @@ export function detect(
     sourceBorderWidth,
     sourceWickWidth,
     sourceStyle,
+    // Judged from where the candles are, never from their colours.
+    cleanliness: checkClean(raw.de, width, height, measured, {
+      lossy: settings.lossySource,
+      knownLines: stripped.found,
+      // Before warning, look again with a more sensitive eye: marks that turn out to be faint
+      // candles are not extras. Only candle-sized finds count.
+      moreCandles: () =>
+        faintCandles(de, dl, width, height, settings, image, background, medianWidth),
+    }),
   };
 }
 
@@ -175,4 +192,37 @@ export function detectCandles(
   settings: DetectSettings = DEFAULT_SETTINGS,
 ): Candle[] {
   return detect(image, settings).candles;
+}
+
+/** Candles that a more sensitive pass finds. Anything not candle-sized is ignored. */
+function faintCandles(
+  de: Float32Array,
+  dl: Float32Array,
+  width: number,
+  height: number,
+  settings: DetectSettings,
+  image: PixelImage,
+  background: Rgb,
+  medianWidth: number,
+): Measured[] {
+  const sensitive = { ...settings, tLow: 2, tHigh: 14 };
+  const found: Measured[] = [];
+  for (const c of segmentColumns(de, width, height, sensitive)) {
+    const m = measureCluster(
+      de,
+      dl,
+      width,
+      height,
+      c.left,
+      c.right,
+      c.split,
+      sensitive,
+      image,
+      background,
+    );
+    if (!m) continue;
+    const w = m.bodyRight - m.bodyLeft;
+    if (w >= 0.7 * medianWidth && w <= 1.4 * medianWidth) found.push(m);
+  }
+  return found;
 }
