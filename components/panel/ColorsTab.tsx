@@ -158,7 +158,7 @@ export function ColorsTab() {
         )}
       </section>
 
-      <section aria-label="Editor" className="space-y-3">
+      <section aria-label="Editor" className="space-y-3 border-t border-border pt-4">
         <label className="space-y-1 text-xs text-muted-foreground">
           Name
           <Input
@@ -169,7 +169,7 @@ export function ColorsTab() {
         </label>
 
         {(['bull', 'bear'] as const).map((side) => (
-          <fieldset key={side} className="space-y-2">
+          <fieldset key={side} className="space-y-2 pt-1">
             <legend className="mb-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
               {side}
             </legend>

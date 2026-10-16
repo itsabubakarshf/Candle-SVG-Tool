@@ -37,6 +37,7 @@ function Viewer({ image }: { image: LoadedImage }) {
   const dpr = useDevicePixelRatio();
   const status = useChartStore((s) => s.status);
   const error = useChartStore((s) => s.error);
+  const count = useChartStore((s) => s.candles.length);
   const clearSelection = useChartStore((s) => s.clearSelection);
   const showScreenshot = useUiStore((s) => s.showScreenshot);
 
@@ -63,7 +64,12 @@ function Viewer({ image }: { image: LoadedImage }) {
         ),
       );
       const s = zoom / dpr;
-      return { zoom, x: (size.w - image.width * s) / 2, y: (size.h - image.height * s) / 2 };
+      // Whole pixels, so the image stays crisp at 1:1.
+      return {
+        zoom,
+        x: Math.round((size.w - image.width * s) / 2),
+        y: Math.round((size.h - image.height * s) / 2),
+      };
     },
     [size, dpr, image.width, image.height],
   );
@@ -159,7 +165,10 @@ function Viewer({ image }: { image: LoadedImage }) {
     <div className="flex h-full min-h-0 flex-col gap-2">
       <div className="flex items-baseline justify-between gap-2 text-xs text-muted-foreground">
         <span className="truncate">
-          {image.name} · {image.width} × {image.height} px
+          {image.name} · {image.width} × {image.height} px ·{' '}
+          <span data-testid="canvas-count">
+            {count} {count === 1 ? 'candle' : 'candles'}
+          </span>
         </span>
         <span className="hidden shrink-0 sm:inline">Scroll to zoom · Space + drag to pan</span>
       </div>
@@ -181,6 +190,7 @@ function Viewer({ image }: { image: LoadedImage }) {
         onPointerDown={() => clearSelection()}
       >
         <div
+          data-testid="content"
           style={{
             position: 'absolute',
             left: 0,
