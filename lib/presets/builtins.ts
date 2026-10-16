@@ -1,6 +1,10 @@
 import { PRESET_SCHEMA_VERSION, type Preset } from './types';
 
 // The ids keep their original text so a saved "active preset" still matches after the rename.
+/** Not a stored preset: the look measured from the uploaded screenshot (see original.ts). */
+export const ORIGINAL_ID = 'original';
+export const ORIGINAL_NAME = 'Original colors';
+
 export const LIGHT_ID = 'builtin-abbi-light';
 export const DARK_ID = 'builtin-abbi-dark';
 

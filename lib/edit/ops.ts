@@ -18,12 +18,19 @@ export function newCandleId(): string {
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
 
+/** Changing type drops the candle's own measured colours: it now looks like its new type. */
+function withType(c: Candle, type: Candle['type']): Candle {
+  const { sourceColors: _dropped, ...rest } = c;
+  void _dropped;
+  return { ...rest, type, confidence: REVIEWED };
+}
+
 export function flipType(c: Candle): Candle {
-  return { ...c, type: c.type === 'bull' ? 'bear' : 'bull', confidence: REVIEWED };
+  return withType(c, c.type === 'bull' ? 'bear' : 'bull');
 }
 
 export function setType(c: Candle, type: Candle['type']): Candle {
-  return c.type === type ? c : { ...c, type, confidence: REVIEWED };
+  return c.type === type ? c : withType(c, type);
 }
 
 /**

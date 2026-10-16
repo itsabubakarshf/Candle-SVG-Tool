@@ -1,4 +1,5 @@
-import type { Candle } from '@/lib/detect/types';
+import type { Candle, CandleColors } from '@/lib/detect/types';
+import { ORIGINAL_ID } from '@/lib/presets/builtins';
 import type { Preset } from '@/lib/presets/types';
 
 export interface WickShape {
@@ -34,6 +35,20 @@ export function candleName(index: number): string {
 }
 
 /**
+ * The colours one candle is drawn with. Order of precedence: the user's per-candle override,
+ * then (in "Original colours") that candle's own measured colours, then the preset's colours
+ * for its type.
+ */
+export function candleColors(c: Candle, preset: Preset): CandleColors {
+  const base = preset.id === ORIGINAL_ID && c.sourceColors ? c.sourceColors : preset[c.type];
+  return {
+    body: c.colorOverride?.body ?? base.body,
+    border: c.colorOverride?.border ?? base.border,
+    wick: c.colorOverride?.wick ?? base.wick,
+  };
+}
+
+/**
  * The shapes for one candle, shared by the live overlay and the SVG export so they always
  * match. All values are in source pixels.
  *
@@ -42,10 +57,7 @@ export function candleName(index: number): string {
  * never one line through the body.
  */
 export function candleShape(c: Candle, index: number, preset: Preset): CandleShape {
-  const colors = preset[c.type];
-  const body = c.colorOverride?.body ?? colors.body;
-  const border = c.colorOverride?.border ?? colors.border;
-  const wick = c.colorOverride?.wick ?? colors.wick;
+  const { body, border, wick } = candleColors(c, preset);
   const bw = preset.borderWidth;
   const width = c.bodyRight - c.bodyLeft;
   const height = c.bodyBottom - c.bodyTop;

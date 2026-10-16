@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { LIGHT_PRESET, LIGHT_ID, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
+import { BUILT_IN_PRESETS, LIGHT_PRESET, ORIGINAL_ID } from '@/lib/presets/builtins';
+import type { SourceStyle } from '@/lib/detect/types';
 import {
   exportPresetsJson,
   loadActiveId,
@@ -31,6 +32,8 @@ interface PresetState {
   /** Saves the draft. A built-in is never changed: it is saved as a new preset instead. */
   saveDraft: () => Preset | null;
   newPreset: () => Preset;
+  /** Saves the colours measured from the screenshot as a preset of its own. */
+  createFromSource: (style: SourceStyle) => Preset;
   duplicate: (id: string) => Preset | null;
   remove: (id: string) => boolean;
   importJson: (
@@ -60,7 +63,8 @@ export const usePresetStore = create<PresetState>((set, get) => {
 
   return {
     presets: initialPresets(),
-    activeId: LIGHT_ID,
+    // New visitors get their own chart's colours, not ours.
+    activeId: ORIGINAL_ID,
     draft: null,
     hydrated: false,
     storageOk: true,
@@ -69,18 +73,20 @@ export const usePresetStore = create<PresetState>((set, get) => {
       const user = loadUserPresets();
       const presets = [...BUILT_IN_PRESETS, ...user];
       const saved = loadActiveId();
-      const activeId = saved && presets.some((p) => p.id === saved) ? saved : LIGHT_ID;
+      const known = saved === ORIGINAL_ID || presets.some((p) => p.id === saved);
+      const activeId = saved && known ? saved : ORIGINAL_ID;
       set({ presets, activeId, draft: null, hydrated: true });
     },
 
     setActive: (id) => {
-      if (!get().presets.some((p) => p.id === id)) return;
+      if (id !== ORIGINAL_ID && !get().presets.some((p) => p.id === id)) return;
       set({ activeId: id, draft: null });
       saveActiveId(id);
     },
 
     editDraft: (patch) => {
       const { presets, activeId, draft } = get();
+      if (activeId === ORIGINAL_ID) return; // Original colours come from the image; copy them to a preset to edit
       const base = draft ?? presets.find((p) => p.id === activeId) ?? LIGHT_PRESET;
       set({ draft: { ...base, ...patch, id: base.id, builtIn: base.builtIn } });
     },
@@ -125,6 +131,25 @@ export const usePresetStore = create<PresetState>((set, get) => {
       return created;
     },
 
+    createFromSource: (style) => {
+      const { presets } = get();
+      const created: Preset = {
+        ...LIGHT_PRESET,
+        id: newPresetId(),
+        builtIn: false,
+        name: uniqueName('From screenshot', presets),
+        bull: style.bull ?? LIGHT_PRESET.bull,
+        bear: style.bear ?? LIGHT_PRESET.bear,
+        borderWidth: style.borderWidth,
+        wickWidth: style.wickWidth,
+        background: null,
+      };
+      const next = [...presets, created];
+      set({ presets: next, activeId: created.id, draft: null });
+      persist(next, created.id);
+      return created;
+    },
+
     duplicate: (id) => {
       const { presets } = get();
       const source = presets.find((p) => p.id === id);
@@ -148,7 +173,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
       const target = presets.find((p) => p.id === id);
       if (!target || target.builtIn) return false; // built-ins cannot be deleted
       const next = presets.filter((p) => p.id !== id);
-      const nextActive = activeId === id ? LIGHT_ID : activeId;
+      const nextActive = activeId === id ? ORIGINAL_ID : activeId;
       set({ presets: next, activeId: nextActive, draft: null });
       persist(next, nextActive);
       return true;
