@@ -32,6 +32,15 @@ test.describe('loading a screenshot', () => {
     await expect(page.getByRole('button', { name: 'Copy SVG' }).first()).toBeDisabled();
   });
 
+  test('the credit links to the developer on Instagram', async ({ page }) => {
+    await page.goto('/');
+    const link = page.getByRole('link', { name: 'Abbi' });
+    await expect(link).toHaveAttribute('href', 'https://www.instagram.com/me__abbi/');
+    await expect(link).toHaveAttribute('target', '_blank');
+    await expect(link).toHaveAttribute('rel', /noopener/);
+    await expect(page.getByText('Dev by')).toBeVisible();
+  });
+
   test('upload detects the 5 candles of the real sample with the right types (AC-1)', async ({
     page,
   }) => {
