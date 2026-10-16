@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { ACTIVE_KEY, PRESETS_KEY, loadUserPresets } from '@/lib/presets/storage';
-import { DARK_ID, LIGHT_ID, BUILT_IN_PRESETS } from '@/lib/presets/builtins';
+import { BUILT_IN_PRESETS, DARK_ID, LIGHT_ID, ORIGINAL_ID } from '@/lib/presets/builtins';
+import type { SourceStyle } from '@/lib/detect/types';
+import { resolvePreset } from '@/store/resolvePreset';
 import { selectActivePreset, usePresetStore } from '@/store/presetStore';
 
 const data: Record<string, string> = {};
@@ -17,7 +19,7 @@ const s = () => usePresetStore.getState();
 function reload() {
   usePresetStore.setState({
     presets: [...BUILT_IN_PRESETS],
-    activeId: LIGHT_ID,
+    activeId: ORIGINAL_ID, // the real default
     draft: null,
     hydrated: false,
     storageOk: true,
@@ -34,9 +36,11 @@ afterEach(() => {
 });
 
 describe('preset store', () => {
-  it('starts with both built-ins and Light active', () => {
+  beforeEach(() => s().setActive(LIGHT_ID)); // these tests edit the Light preset
+
+  it('starts with both built-ins', () => {
     expect(s().presets.map((p) => p.name)).toEqual(['Light', 'Dark']);
-    expect(selectActivePreset(s()).id).toBe(LIGHT_ID);
+    expect(selectActivePreset(s()).id).toBe(LIGHT_ID); // active in this block
   });
 
   it('shows draft edits live without saving them', () => {
@@ -89,22 +93,24 @@ describe('preset store', () => {
     expect(a.name).not.toBe(b.name);
   });
 
-  it('deleting the active preset falls back to Light', () => {
+  it('deleting the active preset falls back to Original colours', () => {
     const p = s().newPreset();
     expect(s().activeId).toBe(p.id);
     s().remove(p.id);
-    expect(s().activeId).toBe(LIGHT_ID);
+    expect(s().activeId).toBe(ORIGINAL_ID);
   });
 });
 
 describe('AC-5: saved presets and the active preset survive a reload', () => {
+  beforeEach(() => s().setActive(LIGHT_ID)); // start on an editable preset
+
   it('restores a custom preset and keeps it active', () => {
     s().editDraft({ name: 'Mine', borderWidth: 2 });
     const saved = s().saveDraft()!;
     expect(data[ACTIVE_KEY]).toBe(saved.id);
 
     reload(); // simulate a fresh page: store starts from defaults
-    expect(s().activeId).toBe(LIGHT_ID);
+    expect(s().activeId).toBe(ORIGINAL_ID);
     s().hydrate();
     expect(s().activeId).toBe(saved.id);
     expect(selectActivePreset(s()).name).toBe('Mine');
@@ -124,7 +130,7 @@ describe('AC-5: saved presets and the active preset survive a reload', () => {
     data[ACTIVE_KEY] = 'does-not-exist';
     s().hydrate();
     expect(s().presets.length).toBe(2);
-    expect(s().activeId).toBe(LIGHT_ID);
+    expect(s().activeId).toBe(ORIGINAL_ID);
     delete (globalThis as { window?: unknown }).window;
     expect(() => s().hydrate()).not.toThrow();
   });
@@ -144,6 +150,8 @@ describe('AC-5: saved presets and the active preset survive a reload', () => {
 });
 
 describe('import and export (FR-14)', () => {
+  beforeEach(() => s().setActive(LIGHT_ID)); // start on an editable preset
+
   it('exports only user presets and imports them back', () => {
     s().editDraft({ name: 'Backup me' });
     s().saveDraft();
@@ -183,5 +191,71 @@ describe('import and export (FR-14)', () => {
   it('rejects files that are not preset backups', () => {
     expect(s().importJson('nope', () => 'skip')).toBeNull();
     expect(s().importJson('{"x":1}', () => 'skip')).toBeNull();
+  });
+});
+
+const SOURCE: SourceStyle = {
+  bull: { body: '#089981', border: '#089981', wick: '#089981' },
+  bear: { body: '#F23645', border: '#393939', wick: '#F23645' },
+  borderWidth: 1.25,
+  wickWidth: 1,
+  background: '#131722',
+};
+
+describe('Original colours (the default: keep the uploaded chart as it is)', () => {
+  it('is the default for a first-time visitor, with or without saved data', () => {
+    expect(s().activeId).toBe(ORIGINAL_ID);
+    s().hydrate();
+    expect(s().activeId).toBe(ORIGINAL_ID);
+  });
+
+  it('draws with the colours and widths found in the screenshot', () => {
+    const p = resolvePreset(s(), SOURCE);
+    expect(p.bull).toEqual(SOURCE.bull);
+    expect(p.bear).toEqual(SOURCE.bear);
+    expect(p.borderWidth).toBe(1.25);
+    expect(p.wickWidth).toBe(1);
+    expect(p.background).toBe('#131722');
+  });
+
+  it('uses the Light colours only for a type the screenshot does not have', () => {
+    const p = resolvePreset(s(), { ...SOURCE, bear: null });
+    expect(p.bull).toEqual(SOURCE.bull);
+    expect(p.bear).toEqual(BUILT_IN_PRESETS[0]!.bear);
+    expect(resolvePreset(s(), null).bull).toEqual(BUILT_IN_PRESETS[0]!.bull);
+  });
+
+  it('a chosen preset replaces it, and choosing Original again brings it back', () => {
+    s().setActive(DARK_ID);
+    expect(resolvePreset(s(), SOURCE).id).toBe(DARK_ID);
+    s().setActive(ORIGINAL_ID);
+    expect(resolvePreset(s(), SOURCE).id).toBe(ORIGINAL_ID);
+  });
+
+  it('remembers the choice across a reload, either way', () => {
+    s().setActive(LIGHT_ID);
+    reload();
+    s().hydrate();
+    expect(s().activeId).toBe(LIGHT_ID);
+    s().setActive(ORIGINAL_ID);
+    reload();
+    s().hydrate();
+    expect(s().activeId).toBe(ORIGINAL_ID);
+  });
+
+  it('cannot be edited in place: edits would be lost, so copy it to a preset first', () => {
+    s().editDraft({ borderWidth: 9 });
+    expect(s().draft).toBeNull();
+  });
+
+  it('can be saved as a preset of its own, which then becomes active', () => {
+    const saved = s().createFromSource(SOURCE);
+    expect(saved.builtIn).toBe(false);
+    expect(saved.name).toBe('From screenshot');
+    expect(saved.bear).toEqual(SOURCE.bear);
+    expect(saved.borderWidth).toBe(1.25);
+    expect(s().activeId).toBe(saved.id);
+    expect(data[PRESETS_KEY]).toContain('From screenshot');
+    expect(s().createFromSource(SOURCE).name).toBe('From screenshot 2');
   });
 });

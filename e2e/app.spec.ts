@@ -10,7 +10,7 @@ import {
   pngBuffer,
   simpleChart,
 } from './helpers';
-import { HOLLOW_STYLE, renderChart } from '../tests/synth/generate';
+import { HOLLOW_STYLE, layout, renderChart } from '../tests/synth/generate';
 
 test.use({ permissions: ['clipboard-read', 'clipboard-write'] });
 
@@ -216,7 +216,10 @@ test.describe('editing (AC-6, AC-7)', () => {
     await page.keyboard.press('t');
     const after = candleGroups(await copiedSvg(page));
     expect(after[1]).not.toEqual(before[1]);
-    expect(after[1]).toContain('fill="#2B2F36"'); // bull -> bear
+    // bull -> bear: it now looks like the chart's other bear candles (same fill as candle 3)
+    const fillOf = (g: string) => /id="Body"[^>]*fill="(#[0-9A-F]{6})"/.exec(g)![1];
+    expect(fillOf(after[1]!)).toBe(fillOf(before[2]!));
+    expect(fillOf(before[1]!)).not.toBe(fillOf(before[2]!));
     for (const i of [0, 2, 3, 4]) expect(after[i]).toEqual(before[i]);
     // the preview changed too
     await expect(page.getByRole('button', { name: 'bear', exact: true })).toHaveAttribute(
@@ -386,6 +389,7 @@ test.describe('presets (AC-5)', () => {
     page,
   }) => {
     await loadSample(page);
+    await page.getByLabel('Active preset').selectOption({ label: 'Light' });
     await page.getByRole('tab', { name: 'Colors' }).click();
     await page
       .getByRole('group', { name: 'bull' })
@@ -425,6 +429,123 @@ test.describe('presets (AC-5)', () => {
     await expect(
       page.getByLabel('Active preset').locator('option', { hasText: 'Backup me 2' }),
     ).toHaveCount(1);
+  });
+});
+
+test.describe('Original colours: the chart keeps the colours it was uploaded with', () => {
+  // The real colours in the sample screenshot (read from its pixels)
+  const BULL_FILL = '#FCFCFE';
+  const BEAR_FILL = '#262F34';
+  const LINE = '#393939';
+
+  test('is the default, and the SVG uses the screenshot colours, not ours', async ({ page }) => {
+    await loadSample(page);
+    await expect(page.getByLabel('Active preset').locator('option:checked')).toHaveText(
+      'Original colors',
+    );
+    const svg = await copiedSvg(page);
+    expect(svg).toContain(`fill="${BULL_FILL}" stroke="${LINE}"`);
+    expect(svg).toContain(`fill="${BEAR_FILL}" stroke="${LINE}"`);
+    expect(svg).not.toContain('#2B2F36'); // the Light preset's colour never appears
+    expect(svg).not.toContain('fill="#FFFFFF"');
+  });
+
+  test('a chart in any other colours keeps them', async ({ page }) => {
+    const style = {
+      background: [255, 255, 255] as [number, number, number],
+      bull: {
+        fill: [255, 214, 10] as [number, number, number],
+        border: [122, 92, 0] as [number, number, number],
+        wick: [122, 92, 0] as [number, number, number],
+      },
+      bear: {
+        fill: [91, 42, 134] as [number, number, number],
+        border: [46, 18, 69] as [number, number, number],
+        wick: [46, 18, 69] as [number, number, number],
+      },
+      borderWidth: 2,
+      wickWidth: 1,
+    };
+    const specs = [0, 1, 2, 3].map((i) => ({
+      type: (i % 2 ? 'bear' : 'bull') as 'bull' | 'bear',
+      bodyTop: 100 + i * 8,
+      bodyBottom: 170 + i * 4,
+      wickTop: 70,
+      wickBottom: 200,
+      bodyWidth: 25,
+    }));
+    await loadBuffer(
+      page,
+      pngBuffer(layout(specs, { style, pitch: 40, height: 260 })),
+      'purple-yellow.png',
+    );
+    await expect(page.getByTestId('canvas-count')).toHaveText('4 candles');
+    const svg = await copiedSvg(page);
+    for (const hex of ['#FFD60A', '#7A5C00', '#5B2A86', '#2E1245']) expect(svg).toContain(hex);
+    expect(svg).toContain('stroke-width="2"'); // the chart's own border width too
+  });
+
+  test('the Colors tab shows what was found, and presets are one click away', async ({ page }) => {
+    await loadSample(page);
+    await page.getByRole('tab', { name: 'Colors' }).click();
+    const found = page.getByTestId('original-colours');
+    await expect(found).toContainText(BULL_FILL);
+    await expect(found).toContainText(BEAR_FILL);
+    await expect(found).toContainText(LINE);
+    // pick a preset: the SVG is restyled; pick Original again: the chart's colours return
+    await page.getByLabel('Active preset').selectOption({ label: 'Light' });
+    let svg = await copiedSvg(page);
+    expect(svg).toContain('#2B2F36');
+    expect(svg).not.toContain(BULL_FILL);
+    await page.getByLabel('Active preset').selectOption({ label: 'Original colors' });
+    svg = await copiedSvg(page);
+    expect(svg).toContain(BULL_FILL);
+    expect(svg).not.toContain('#2B2F36');
+  });
+
+  test('the choice is remembered; a new visitor starts on Original colours', async ({
+    page,
+    browser,
+  }) => {
+    await loadSample(page);
+    await page.getByLabel('Active preset').selectOption({ label: 'Dark' });
+    await page.reload();
+    await expect(page.getByLabel('Active preset').locator('option:checked')).toHaveText('Dark');
+    const fresh = await browser.newContext();
+    const other = await fresh.newPage();
+    await other.goto('/');
+    await expect(other.getByLabel('Active preset').locator('option:checked')).toHaveText(
+      'Original colors',
+    );
+    await fresh.close();
+  });
+
+  test('"Save as preset" keeps the chart\'s colours as a preset you can edit', async ({ page }) => {
+    await loadSample(page);
+    await page.getByRole('tab', { name: 'Colors' }).click();
+    await page.getByRole('button', { name: 'Save as preset' }).click();
+    await expect(page.getByLabel('Active preset').locator('option:checked')).toHaveText(
+      'From screenshot',
+    );
+    // it is a normal preset now: editable, with the chart's colours in it
+    await expect(
+      page.getByRole('group', { name: 'bull' }).getByLabel('Body fill', { exact: true }),
+    ).toHaveValue(BULL_FILL);
+    await page
+      .getByRole('group', { name: 'bull' })
+      .getByLabel('Body fill', { exact: true })
+      .fill('#00FF00');
+    await page.getByRole('button', { name: 'Save' }).click();
+    expect(await copiedSvg(page)).toContain('fill="#00FF00"');
+  });
+
+  test("flipping a candle gives it the chart's colours for the other type", async ({ page }) => {
+    await loadSample(page);
+    await page.getByTestId('hit-1').click({ position: { x: 22, y: 100 } });
+    await page.keyboard.press('t'); // candle 1: bull -> bear
+    const groups = candleGroups(await copiedSvg(page));
+    expect(groups[0]).toContain(`fill="${BEAR_FILL}"`);
+    expect(groups[0]).not.toContain(BULL_FILL);
   });
 });
 

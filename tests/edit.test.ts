@@ -6,6 +6,7 @@ import {
   resetOverride,
   setColorOverride,
   setEdge,
+  setType,
   splitCandle,
 } from '@/lib/edit/ops';
 
@@ -29,6 +30,14 @@ describe('flip and overrides', () => {
     expect(f.type).toBe('bear');
     expect(f.confidence).toBe(1);
     expect(base.type).toBe('bull'); // original untouched
+  });
+
+  it("changing type drops the candle's own measured colours: it now looks like its new type", () => {
+    const own = { ...base, sourceColors: { body: '#112233', border: '#112233', wick: '#112233' } };
+    expect(flipType(own).sourceColors).toBeUndefined();
+    expect(flipType(own).type).toBe('bear');
+    expect(setType(own, 'bull')).toBe(own); // same type: untouched
+    expect(setType(own, 'bear').sourceColors).toBeUndefined();
   });
 
   it('sets, removes and resets colour overrides', () => {

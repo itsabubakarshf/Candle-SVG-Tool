@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import type { Candle } from '@/lib/detect/types';
 import { DARK_PRESET, LIGHT_PRESET } from '@/lib/presets/builtins';
 import { buildSvg, fmt } from '@/lib/svg/buildSvg';
+import { originalPreset } from '@/lib/presets/original';
+import { candleColors } from '@/lib/svg/geometry';
 import { normalizeHex } from '@/lib/svg/hex';
 
 function candle(patch: Partial<Candle> = {}): Candle {
@@ -193,5 +195,60 @@ describe('normalizeHex', () => {
     for (const bad of ['', '#12', '#12345', 'red', '#GGGGGG', '#1234567']) {
       expect(normalizeHex(bad), bad).toBeNull();
     }
+  });
+});
+
+describe('Original colours in the SVG', () => {
+  const source = {
+    bull: { body: '#089981', border: '#066B58', wick: '#066B58' },
+    bear: { body: '#F23645', border: '#F23645', wick: '#F23645' },
+    borderWidth: 2,
+    wickWidth: 1.5,
+    background: '#131722',
+  };
+  const preset = originalPreset(source);
+
+  it('draws each type with the colours found in the screenshot, not the preset', () => {
+    const svg = buildSvg(
+      [candle(), candle({ id: 'b', type: 'bear', centerX: 100, bodyLeft: 87, bodyRight: 113 })],
+      preset,
+      SIZE,
+    );
+    expect(svg).toContain('fill="#089981" stroke="#066B58" stroke-width="2"');
+    expect(svg).toContain('fill="#F23645" stroke="#F23645" stroke-width="2"');
+    expect(svg).toContain('stroke="#066B58" stroke-width="1.5" stroke-linecap="butt"');
+    expect(svg).not.toContain('#2B2F36');
+    expect(svg).not.toContain('#FFFFFF');
+  });
+
+  it("gives one candle its own measured colours when it differs from its type's usual ones", () => {
+    const odd = candle({ sourceColors: { body: '#2962FF', border: '#1E40AF', wick: '#1E40AF' } });
+    expect(candleColors(odd, preset)).toEqual({
+      body: '#2962FF',
+      border: '#1E40AF',
+      wick: '#1E40AF',
+    });
+    expect(candleColors(candle(), preset).body).toBe('#089981');
+  });
+
+  it("keeps the user's manual colour override above everything", () => {
+    const c = candle({
+      sourceColors: { body: '#2962FF', border: '#1E40AF', wick: '#1E40AF' },
+      colorOverride: { body: '#FF0000' },
+    });
+    expect(candleColors(c, preset)).toEqual({
+      body: '#FF0000',
+      border: '#1E40AF',
+      wick: '#1E40AF',
+    });
+  });
+
+  it("ignores a candle's own colours once a normal preset is chosen", () => {
+    const odd = candle({ sourceColors: { body: '#2962FF', border: '#1E40AF', wick: '#1E40AF' } });
+    expect(candleColors(odd, LIGHT_PRESET).body).toBe('#FFFFFF');
+  });
+
+  it("the background rectangle uses the chart's own background colour", () => {
+    expect(buildSvg([candle()], preset, SIZE, { background: true })).toContain('fill="#131722"/>');
   });
 });
