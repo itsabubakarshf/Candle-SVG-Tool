@@ -12,6 +12,7 @@ import { useImageIntake } from '@/lib/image/useImageIntake';
 import { useShortcuts } from '@/lib/shortcuts/useShortcuts';
 import { LOW_CONFIDENCE_THRESHOLD, useChartStore } from '@/store/chartStore';
 import { usePresetStore } from '@/store/presetStore';
+import { useThemeStore } from '@/store/themeStore';
 
 export function App() {
   const ingest = useImageIntake();
@@ -20,9 +21,11 @@ export function App() {
   const status = useChartStore((s) => s.status);
   const error = useChartStore((s) => s.error);
   const hydrate = usePresetStore((s) => s.hydrate);
+  const hydrateTheme = useThemeStore((s) => s.hydrate);
 
   // Saved presets are read on the client only, so the server render matches the first paint.
   useEffect(() => hydrate(), [hydrate]);
+  useEffect(() => hydrateTheme(), [hydrateTheme]);
 
   // Tell the user what detection found (or why it found nothing).
   const announced = useRef<string>('');

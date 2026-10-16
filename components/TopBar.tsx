@@ -1,6 +1,7 @@
 'use client';
 
 import { Copy, Keyboard } from 'lucide-react';
+import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
 import { copySvg } from '@/lib/export/actions';
 import { useChartStore } from '@/store/chartStore';
@@ -38,6 +39,7 @@ export function TopBar() {
             ))}
           </select>
         </label>
+        <ThemeToggle />
         <Button
           variant="ghost"
           size="icon"

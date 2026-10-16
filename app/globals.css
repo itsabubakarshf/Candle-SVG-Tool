@@ -1,6 +1,7 @@
 @import 'tailwindcss';
 
 :root {
+  color-scheme: light;
   --background: #ffffff;
   --foreground: #14161a;
   --muted: #f1f2f4;
@@ -11,8 +12,10 @@
   --ring: #3b82f6;
 }
 
+/* Follow the system unless the user picked a theme (data-theme on <html>). */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
     --background: #0e1013;
     --foreground: #ececee;
     --muted: #1b1e23;
@@ -22,6 +25,18 @@
     --primary-foreground: #0e1013;
     --ring: #60a5fa;
   }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --background: #0e1013;
+  --foreground: #ececee;
+  --muted: #1b1e23;
+  --muted-foreground: #a0a6b0;
+  --border: #2c3037;
+  --primary: #ececee;
+  --primary-foreground: #0e1013;
+  --ring: #60a5fa;
 }
 
 @theme inline {
