@@ -1,5 +1,7 @@
+import type { Rgb } from '@/lib/color/lab';
+import { overWhite } from './background';
 import { strongThreshold } from './segment';
-import type { DetectSettings } from './types';
+import type { DetectSettings, PixelImage } from './types';
 
 /**
  * Geometry of one candle, in source pixels. Pixel i covers [i, i + 1].
@@ -26,6 +28,10 @@ export interface Measured {
   /** Border thickness of a hollow body. null for solid bodies. */
   borderWidth: number | null;
   wickWidth: number | null;
+  /** Colour of the border line, from the pixels. */
+  borderRgb: Rgb;
+  /** Colour of the wick line. null if the candle has no wick. */
+  wickRgb: Rgb | null;
   split: boolean;
 }
 
@@ -54,6 +60,8 @@ export function measureCluster(
   x1: number,
   split: boolean,
   settings: DetectSettings,
+  image: PixelImage,
+  background: Rgb,
 ): Measured | null {
   const { tLow, tHigh } = settings;
   const strong = strongThreshold(settings);
@@ -95,6 +103,29 @@ export function measureCluster(
       ? Math.min(1, (dl[y * width + x] as number) / inkL)
       : Math.min(1, v / inkRef);
   };
+
+  // ---- colours: read a line's own colour from its pixels.
+  const rgbAt = (x: number, y: number): Rgb => {
+    const i = (y * width + x) * 4;
+    const a = image.data[i + 3] as number;
+    return [
+      overWhite(image.data[i] as number, a),
+      overWhite(image.data[i + 1] as number, a),
+      overWhite(image.data[i + 2] as number, a),
+    ];
+  };
+  /** A pixel only partly covered by a line is the line blended with the background: undo it. */
+  const unblend = (px: Rgb, f: number): Rgb => {
+    if (f >= 0.85) return px;
+    const k = Math.max(f, 0.25);
+    return px.map((v, c) =>
+      Math.max(0, Math.min(255, (background[c] as number) + (v - (background[c] as number)) / k)),
+    ) as Rgb;
+  };
+  const medianRgb = (list: Rgb[]): Rgb | null =>
+    list.length === 0
+      ? null
+      : ([0, 1, 2].map((c) => median(list.map((p) => p[c] as number))) as Rgb);
 
   // ---- step 5: covered span of every row
   const rowSpan = new Int32Array(height);
@@ -232,6 +263,39 @@ export function measureCluster(
       ? median(borderMasses)
       : null;
 
+  // Border colour: the outermost solidly inked pixel on each side, row by row. For a hollow
+  // body that is the border line; for a solid body it is the edge of the fill.
+  const borderSamples: Rgb[] = [];
+  const step = Math.max(1, Math.floor(sideRows.length / 40));
+  for (let k = 0; k < sideRows.length; k += step) {
+    const y = sideRows[k] as number;
+    for (const dir of [1, -1] as const) {
+      const from = dir === 1 ? x0 : x1;
+      const to =
+        dir === 1
+          ? Math.min(x1, Math.floor(coarseLeft) + 3)
+          : Math.max(x0, Math.ceil(coarseRight) - 4);
+      let pick: Rgb | null = null;
+      let bestF = 0;
+      let bestPx: Rgb | null = null;
+      for (let x = from; dir === 1 ? x <= to : x >= to; x += dir) {
+        const f = frac(x, y);
+        if (f >= 0.85) {
+          pick = rgbAt(x, y);
+          break;
+        }
+        if (f > bestF) {
+          bestF = f;
+          bestPx = rgbAt(x, y);
+        }
+      }
+      if (!pick && bestPx && bestF >= 0.1) pick = unblend(bestPx, bestF);
+      if (pick) borderSamples.push(pick);
+    }
+  }
+  const borderRgb =
+    medianRgb(borderSamples) ?? rgbAt(Math.round((bodyLeft + bodyRight) / 2), Math.round(r0));
+
   // ---- top and bottom: lower quartile of the ink fraction across the body's columns.
   // The wick covers only a few columns, so the quartile ignores it.
   // 0.3 px of slack so an edge measured at 14.9985 still counts as 15.
@@ -292,6 +356,7 @@ export function measureCluster(
     end: number;
     x: number;
     width: number;
+    rgb: Rgb | null;
   }
   const bodyCentre = (bodyLeft + bodyRight) / 2;
   const measureWick = (dir: -1 | 1): Wick | null => {
@@ -351,14 +416,30 @@ export function measureCluster(
     const to = count >= 4 ? count - 2 : count - 1;
     let sum = 0;
     let weight = 0;
+    const colourSamples: Rgb[] = [];
     for (let k = from; k <= to; k++) {
+      const y = rowAt(k);
+      let strongest = -1;
+      let strongestF = 0;
       for (let x = wl; x <= wr; x++) {
-        const m = frac(x, rowAt(k));
+        const m = frac(x, y);
         sum += m * (x + 0.5);
         weight += m;
+        if (m > strongestF) {
+          strongestF = m;
+          strongest = x;
+        }
+      }
+      if (strongest >= 0 && strongestF >= 0.1) {
+        colourSamples.push(unblend(rgbAt(strongest, y), strongestF));
       }
     }
-    return { end, x: weight > 0 ? sum / weight : xp + 0.5, width: ref };
+    return {
+      end,
+      x: weight > 0 ? sum / weight : xp + 0.5,
+      width: ref,
+      rgb: medianRgb(colourSamples),
+    };
   };
 
   const up = measureWick(-1);
@@ -378,6 +459,8 @@ export function measureCluster(
     isDoji: bodyBottom - bodyTop < 2,
     borderWidth,
     wickWidth: wicks.length ? median(wicks.map((w) => w.width)) : null,
+    borderRgb,
+    wickRgb: medianRgb(wicks.flatMap((w) => (w.rgb ? [w.rgb] : []))),
     split,
   };
 }

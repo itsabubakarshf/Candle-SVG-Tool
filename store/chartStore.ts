@@ -156,7 +156,9 @@ export const useChartStore = create<ChartState>((set, get) => {
       const token = ++detectToken;
       set({ status: 'running', error: null });
       try {
-        const result = await detectInWorker(image.file, settings);
+        // JPEG and WebP can be lossy: tell detection so it does not trust 1 px line colours.
+        const lossySource = image.file.type !== 'image/png';
+        const result = await detectInWorker(image.file, { ...settings, lossySource });
         if (token !== detectToken || get().image !== image) return; // a newer run took over
         if (result.candles.length === 0) {
           set({
