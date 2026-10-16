@@ -10,6 +10,8 @@ import { ORIGINAL_ID, ORIGINAL_NAME } from '@/lib/presets/builtins';
 import { usePresetStore } from '@/store/presetStore';
 import { useUiStore } from '@/store/uiStore';
 
+const BROWSE = '__browse__';
+
 export function TopBar() {
   const hasImage = useChartStore((s) => s.image !== null);
   const hasCandles = useChartStore((s) => s.candles.length > 0);
@@ -18,6 +20,8 @@ export function TopBar() {
   const activeId = usePresetStore((s) => s.activeId);
   const setActive = usePresetStore((s) => s.setActive);
   const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
+  const setTab = useUiStore((s) => s.setTab);
+  const online = usePresetStore((s) => s.cloud !== 'off');
 
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2">
@@ -42,15 +46,48 @@ export function TopBar() {
           <select
             aria-label="Active preset"
             value={activeId}
-            onChange={(e) => setActive(e.target.value)}
-            className="h-8 rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            onChange={(e) => {
+              if (e.target.value === BROWSE) {
+                setTab('colors'); // the full list, with search, lives in the Colors tab
+                return;
+              }
+              setActive(e.target.value);
+            }}
+            className="h-8 max-w-[11rem] rounded-md border border-border bg-background px-2 text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
             <option value={ORIGINAL_ID}>{ORIGINAL_NAME}</option>
-            {presets.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
+            <optgroup label="Built-in">
+              {presets
+                .filter((p) => p.builtIn && !p.community)
+                .map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+            </optgroup>
+            {presets.some((p) => !p.builtIn) && (
+              <optgroup label="Mine">
+                {presets
+                  .filter((p) => !p.builtIn)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+              </optgroup>
+            )}
+            {online && (
+              <optgroup label="Shared">
+                {presets
+                  .filter((p) => p.community && p.id === activeId)
+                  .map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} (by {p.community?.ownerName ?? 'someone'})
+                    </option>
+                  ))}
+                <option value={BROWSE}>Browse shared presets…</option>
+              </optgroup>
+            )}
           </select>
         </label>
         <AccountButton />

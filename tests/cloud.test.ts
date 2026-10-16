@@ -5,7 +5,10 @@ import {
   accountOf,
   deleteCloudPreset,
   mergeShared,
-  pullPresets,
+  cleanSearch,
+  pullOwn,
+  pullPresetById,
+  pullShared,
   pullSettings,
   pushSettings,
   pushPresets,
@@ -28,33 +31,72 @@ interface Row {
   data: unknown;
 }
 
-/** A tiny stand-in for the Supabase client: one table, rows from several accounts. */
+/** A small stand-in for the Supabase client: one table, rows from several accounts. */
 function fakeClient(opts: { failQueries?: boolean } = {}) {
   const rows: Row[] = [];
   const err = { message: 'boom' };
   const client = {
-    from: () => ({
-      select: async () =>
-        opts.failQueries ? { data: null, error: err } : { data: [...rows], error: null },
-      upsert: async (list: Row[]) => {
-        if (opts.failQueries) return { error: err };
-        for (const r of list) {
-          const at = rows.findIndex((x) => x.id === r.id && x.user_id === r.user_id);
-          if (at >= 0) rows[at] = r;
-          else rows.push(r);
+    from: () => {
+      type Filter = (r: Row) => boolean;
+      const filters: Filter[] = [];
+      let order: { col: 'name' | 'updated_at'; asc: boolean } | null = null;
+      let from = 0;
+      let to = Infinity;
+      const run = () => {
+        if (opts.failQueries) return { data: null, error: err };
+        let out = rows.filter((r) => filters.every((f) => f(r)));
+        if (order) {
+          const { col, asc } = order;
+          out = [...out].sort((x, y) => {
+            const a = String(x[col === 'name' ? 'name' : 'id']);
+            const b = String(y[col === 'name' ? 'name' : 'id']);
+            return asc ? a.localeCompare(b) : b.localeCompare(a);
+          });
         }
-        return { error: null };
-      },
-      delete: () => ({
-        eq: (_c1: string, id: string) => ({
-          eq: async (_c2: string, userId: string) => {
-            const at = rows.findIndex((x) => x.id === id && x.user_id === userId);
-            if (at >= 0) rows.splice(at, 1);
-            return { error: null };
-          },
+        return { data: out.slice(from, to + 1), error: null };
+      };
+      const q: Record<string, unknown> = {
+        select: () => q,
+        eq: (col: keyof Row, v: string) => (filters.push((r) => r[col] === v), q),
+        neq: (col: keyof Row, v: string) => (filters.push((r) => r[col] !== v), q),
+        or: (expr: string) => {
+          const m = /name\.ilike\.%(.*)%,owner_name/.exec(expr);
+          const text = (m?.[1] ?? '').toLowerCase();
+          filters.push(
+            (r) =>
+              r.name.toLowerCase().includes(text) ||
+              (r.owner_name ?? '').toLowerCase().includes(text),
+          );
+          return q;
+        },
+        order: (col: 'name' | 'updated_at', o: { ascending: boolean }) => (
+          (order = { col, asc: o.ascending }),
+          q
+        ),
+        limit: (n: number) => ((to = n - 1), q),
+        range: (a: number, b: number) => ((from = a), (to = b), q),
+        then: (resolve: (v: unknown) => void) => resolve(run()),
+        upsert: async (list: Row[]) => {
+          if (opts.failQueries) return { error: err };
+          for (const r of list) {
+            const at = rows.findIndex((x) => x.id === r.id && x.user_id === r.user_id);
+            if (at >= 0) rows[at] = r;
+            else rows.push(r);
+          }
+          return { error: null };
+        },
+        delete: () => ({
+          eq: (_c1: string, id: string) => ({
+            eq: async (_c2: string, userId: string) => {
+              const at = rows.findIndex((x) => x.id === id && x.user_id === userId);
+              if (at >= 0) rows.splice(at, 1);
+              return { error: null };
+            },
+          }),
         }),
-      }),
-    }),
+      };
+      return q;
+    },
   };
   return { client: client as unknown as SupabaseClient, rows };
 }
@@ -81,7 +123,9 @@ describe('accounts', () => {
 describe('shared presets online', () => {
   it('does nothing when the database is switched off', async () => {
     setCloudClient(null);
-    expect(await pullPresets(null)).toBeNull();
+    expect(await pullOwn(me.id)).toBeNull();
+    expect(await pullShared({ accountId: null })).toBeNull();
+    expect(await pullPresetById('a', null)).toBeNull();
     expect(await pushPresets([mine('a', 'A')], me)).toBe(false);
     expect(await deleteCloudPreset('a', me)).toBe(false);
   });
@@ -92,15 +136,61 @@ describe('shared presets online', () => {
     expect(await pushPresets([mine('a', 'A'), mine('b', 'B')], me)).toBe(true);
     expect(f.rows.every((r) => r.user_id === me.id && r.owner_name === 'Me')).toBe(true);
 
-    const own = await pullPresets(me.id);
-    expect(own?.map((p) => [p.id, p.builtIn, p.community])).toEqual([
+    const own = await pullOwn(me.id);
+    expect(own?.map((p) => [p.id, p.builtIn, p.community]).sort()).toEqual([
       ['a', false, undefined],
       ['b', false, undefined],
     ]);
 
-    const visitor = await pullPresets(null);
-    expect(visitor).toHaveLength(2);
-    expect(visitor?.every((p) => p.builtIn && p.community?.ownerName === 'Me')).toBe(true);
+    const visitor = await pullShared({ accountId: null });
+    expect(visitor?.presets).toHaveLength(2);
+    expect(visitor?.presets.every((p) => p.builtIn && p.community?.ownerName === 'Me')).toBe(true);
+    // the account's own presets are not listed again as someone else's
+    expect((await pullShared({ accountId: me.id }))?.presets).toHaveLength(0);
+  });
+
+  it('browses the shared presets one page at a time, and searches by name or author', async () => {
+    const f = fakeClient();
+    setCloudClient(f.client);
+    const ada = { id: 'ada', email: null, name: 'Ada' };
+    const bo = { id: 'bo', email: null, name: 'Bo' };
+    await pushPresets(
+      Array.from({ length: 5 }, (_, i) => mine(`ada-${i}`, `Neon ${i}`)),
+      ada,
+    );
+    await pushPresets([mine('bo-1', 'Mono'), mine('bo-2', 'Pastel')], bo);
+
+    const first = await pullShared({ accountId: me.id, limit: 3 });
+    expect(first).toMatchObject({ fetched: 3, more: true });
+    const next = await pullShared({ accountId: me.id, limit: 3, offset: first?.fetched });
+    expect(next?.fetched).toBe(3);
+    const last = await pullShared({ accountId: me.id, limit: 3, offset: 6 });
+    expect(last).toMatchObject({ fetched: 1, more: false });
+
+    expect((await pullShared({ accountId: me.id, query: 'neon' }))?.presets).toHaveLength(5);
+    expect(
+      (await pullShared({ accountId: me.id, query: 'bo' }))?.presets.map((p) => p.id).sort(),
+    ).toEqual(['bo-1', 'bo-2']);
+    const byName = await pullShared({ accountId: me.id, sort: 'name' });
+    expect(byName?.presets.map((p) => p.name)).toEqual(
+      [...(byName?.presets ?? [])].map((p) => p.name).sort((a, b) => a.localeCompare(b)),
+    );
+  });
+
+  it('finds one shared preset by id', async () => {
+    const f = fakeClient();
+    setCloudClient(f.client);
+    await pushPresets([mine('x1', 'Picked')], { id: 'ada', email: null, name: 'Ada' });
+    const one = await pullPresetById('x1', me.id);
+    expect(one?.name).toBe('Picked');
+    expect(one?.community?.ownerName).toBe('Ada');
+    expect(await pullPresetById('missing', me.id)).toBeNull();
+  });
+
+  it('keeps only quiet characters in a search', () => {
+    expect(cleanSearch('  neon,(x)%_ "q"  ')).toBe('neon x _ q');
+    expect(cleanSearch('a'.repeat(100))).toHaveLength(40);
+    expect(cleanSearch('Ünïcode name')).toBe('Ünïcode name');
   });
 
   it("only deletes the account's own row", async () => {
@@ -114,7 +204,8 @@ describe('shared presets online', () => {
 
   it('fails soft when queries fail', async () => {
     setCloudClient(fakeClient({ failQueries: true }).client);
-    expect(await pullPresets(me.id)).toBeNull();
+    expect(await pullOwn(me.id)).toBeNull();
+    expect(await pullShared({ accountId: null })).toBeNull();
     expect(await pushPresets([mine('a', 'A')], me)).toBe(false);
   });
 
@@ -122,7 +213,7 @@ describe('shared presets online', () => {
     const f = fakeClient();
     f.rows.push({ id: 'x', user_id: 'u', name: 'X', owner_name: null, data: { nonsense: true } });
     setCloudClient(f.client);
-    expect(await pullPresets(null)).toEqual([]);
+    expect((await pullShared({ accountId: null }))?.presets).toEqual([]);
   });
 
   it("adds shared presets after the visitor's own and skips ids already in the list", () => {

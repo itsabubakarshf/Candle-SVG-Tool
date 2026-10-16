@@ -4,16 +4,16 @@ import { useMemo, useRef } from 'react';
 import { Copy, Download, Plus, Save, Trash2, Undo2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { ColorField } from '@/components/ColorField';
+import { PresetBrowser } from '@/components/panel/PresetBrowser';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { downloadText } from '@/lib/export/download';
 import type { CandleColors } from '@/lib/detect/types';
-import { ORIGINAL_ID, ORIGINAL_NAME } from '@/lib/presets/builtins';
+import { ORIGINAL_ID } from '@/lib/presets/builtins';
 import { currentSourceStyle } from '@/lib/detect/hints';
 import { useChartStore } from '@/store/chartStore';
 import { selectActivePreset, usePresetStore } from '@/store/presetStore';
-import { cn } from '@/lib/utils';
 
 const FIELDS: Array<{ key: keyof CandleColors; label: string }> = [
   { key: 'body', label: 'Body fill' },
@@ -28,7 +28,6 @@ export function ColorsTab() {
   const storageOk = usePresetStore((s) => s.storageOk);
   const ensureSignedIn = usePresetStore((s) => s.ensureSignedIn);
   const edit = usePresetStore(selectActivePreset);
-  const setActive = usePresetStore((s) => s.setActive);
   const editDraft = usePresetStore((s) => s.editDraft);
   const discardDraft = usePresetStore((s) => s.discardDraft);
   const saveDraft = usePresetStore((s) => s.saveDraft);
@@ -76,55 +75,7 @@ export function ColorsTab() {
   return (
     <div className="space-y-5">
       <section aria-label="Presets" className="space-y-2">
-        <ul className="space-y-0.5" role="listbox" aria-label="Preset list">
-          <li>
-            <button
-              type="button"
-              role="option"
-              aria-selected={isOriginal}
-              onClick={() => setActive(ORIGINAL_ID)}
-              className={cn(
-                'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                isOriginal && 'bg-muted font-medium',
-              )}
-            >
-              <span className="truncate">{ORIGINAL_NAME}</span>
-              <span className="ml-2 text-[10px] uppercase text-muted-foreground">
-                from your chart
-              </span>
-            </button>
-          </li>
-          {presets.map((p) => (
-            <li key={p.id}>
-              <button
-                type="button"
-                role="option"
-                aria-selected={p.id === activeId}
-                onClick={() => setActive(p.id)}
-                className={cn(
-                  'flex w-full items-center justify-between rounded px-2 py-1.5 text-left text-sm hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  p.id === activeId && 'bg-muted font-medium',
-                )}
-              >
-                <span className="truncate">{p.name}</span>
-                <span className="ml-2 flex shrink-0 gap-0.5" aria-hidden>
-                  {[p.bull.body, p.bull.border, p.bear.body].map((c, i) => (
-                    <span
-                      key={i}
-                      className="h-3 w-3 rounded-sm border border-border"
-                      style={{ background: c }}
-                    />
-                  ))}
-                </span>
-                {p.builtIn && (
-                  <span className="ml-2 max-w-[6rem] shrink-0 truncate text-[10px] uppercase text-muted-foreground">
-                    {p.community ? (p.community.ownerName ?? 'shared') : 'built-in'}
-                  </span>
-                )}
-              </button>
-            </li>
-          ))}
-        </ul>
+        <PresetBrowser />
         <div className="grid grid-cols-3 gap-2">
           <Button variant="outline" size="sm" onClick={() => newPreset()} title="New preset">
             <Plus className="h-3.5 w-3.5" aria-hidden />

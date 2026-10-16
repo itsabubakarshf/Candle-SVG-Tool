@@ -25,12 +25,47 @@ interface Fake {
   authCalls: string[];
 }
 
-async function fakeDatabase(page: Page, opts: { google?: boolean } = {}): Promise<Fake> {
+/** Many presets from other people, to try searching and paging. */
+const CROWD = Array.from({ length: 95 }, (_, i) => {
+  const n = String(i + 1).padStart(3, '0');
+  return {
+    ...SHARED_ROW,
+    id: `crowd-${n}`,
+    user_id: i % 2 ? 'person-b' : 'person-a',
+    owner_name: i % 2 ? 'Bo' : 'Cy',
+    data: { ...SHARED_ROW.data, id: `crowd-${n}`, name: `Crowd ${n}` },
+  };
+});
+
+async function fakeDatabase(
+  page: Page,
+  opts: { google?: boolean; crowd?: boolean } = {},
+): Promise<Fake> {
   const fake: Fake = { writes: [], authCalls: [] };
   await page.route(`${DB}/rest/v1/presets**`, async (route) => {
     const r = route.request();
     if (r.method() === 'GET') {
-      await route.fulfill({ json: [SHARED_ROW] });
+      // answer like the real table: filter by owner, by search text, then page
+      const q = new URL(r.url()).searchParams;
+      let rows = opts.crowd ? CROWD : [SHARED_ROW];
+      const owner = q.get('user_id');
+      if (owner?.startsWith('eq.')) rows = rows.filter((x) => x.user_id === owner.slice(3));
+      if (owner?.startsWith('neq.')) rows = rows.filter((x) => x.user_id !== owner.slice(4));
+      const id = q.get('id');
+      if (id?.startsWith('eq.')) rows = rows.filter((x) => x.id === id.slice(3));
+      const match = /ilike\.%(.*?)%/.exec(q.get('or') ?? '');
+      if (match) {
+        const text = (match[1] ?? '').toLowerCase();
+        rows = rows.filter(
+          (x) =>
+            x.data.name.toLowerCase().includes(text) || x.owner_name.toLowerCase().includes(text),
+        );
+      }
+      if (q.get('order')?.startsWith('name'))
+        rows = [...rows].sort((a, b) => a.data.name.localeCompare(b.data.name));
+      const offset = Number(q.get('offset') ?? 0);
+      const limit = Number(q.get('limit') ?? rows.length);
+      await route.fulfill({ json: rows.slice(offset, offset + limit) });
       return;
     }
     fake.writes.push({ method: r.method(), url: r.url(), body: r.postData() ?? '' });
@@ -192,5 +227,80 @@ test.describe('saving presets needs an account', () => {
     const sent = JSON.parse(fake.writes[0]!.body) as { id: string; name: string }[];
     expect(sent.map((r) => r.name)).toEqual(['My neon']);
     expect(sent[0]!.id).not.toBe('their-preset');
+  });
+});
+
+test.describe('lots of shared presets', () => {
+  const list = (page: Page) =>
+    page.getByRole('listbox', { name: 'Preset list' }).filter({ visible: true });
+  const search = (page: Page) =>
+    page.getByRole('textbox', { name: 'Search presets' }).filter({ visible: true });
+
+  test('are listed a page at a time, with a clear way to get more', async ({ page }) => {
+    await fakeDatabase(page, { crowd: true });
+    await openColors(page);
+    const crowd = list(page).getByRole('option').filter({ hasText: /Crowd/ });
+    await expect(list(page).getByText('Shared by others')).toBeVisible();
+    await expect(crowd).toHaveCount(40);
+    await list(page).getByRole('button', { name: 'Show more' }).click();
+    await expect(crowd).toHaveCount(80);
+    await list(page).getByRole('button', { name: 'Show more' }).click();
+    await expect(crowd).toHaveCount(95);
+    await expect(list(page).getByRole('button', { name: 'Show more' })).toHaveCount(0);
+    await expect(
+      list(page)
+        .getByText(/by (Bo|Cy)/)
+        .first(),
+    ).toBeVisible();
+  });
+
+  test('can be searched by name or by person', async ({ page }) => {
+    await fakeDatabase(page, { crowd: true });
+    await openColors(page);
+    await search(page).fill('Crowd 07');
+    const crowd = list(page).getByRole('option').filter({ hasText: /Crowd/ });
+    await expect(crowd).toHaveCount(10); // 070 to 079
+    await search(page).fill('zzz nothing');
+    await expect(list(page).getByText(/Nothing matches/)).toBeVisible();
+    await page.getByRole('button', { name: 'Clear search' }).filter({ visible: true }).click();
+    await expect(crowd.first()).toBeVisible();
+  });
+
+  test('the Mine and Shared filters, and the order', async ({ page }) => {
+    await fakeDatabase(page, { crowd: true });
+    await signedIn(page, 'Mo');
+    await openColors(page);
+    const group = page.getByRole('group', { name: 'Show' }).filter({ visible: true });
+    await group.getByRole('button', { name: 'Mine' }).click();
+    await expect(list(page).getByText('Presets you save appear here')).toBeVisible();
+    await expect(list(page).getByText('Shared by others')).toHaveCount(0);
+    await group.getByRole('button', { name: 'Shared' }).click();
+    await expect(list(page).getByText('Built-in')).toHaveCount(0);
+    await page.getByLabel('Order').filter({ visible: true }).selectOption('name');
+    await expect(list(page).getByRole('option').first()).toContainText('Crowd 001');
+  });
+
+  test('the top bar menu stays short and points to the full list', async ({ page }) => {
+    await fakeDatabase(page, { crowd: true });
+    await page.goto('/');
+    const select = page.getByLabel('Active preset');
+    expect(await select.locator('option').count()).toBeLessThan(8);
+    await select.selectOption({ label: 'Browse shared presets…' });
+    await expect(page.getByRole('tab', { name: 'Colors' })).toHaveAttribute(
+      'aria-selected',
+      'true',
+    );
+  });
+
+  test('a preset picked from the list is remembered after a reload', async ({ page }) => {
+    await fakeDatabase(page, { crowd: true });
+    await openColors(page);
+    await search(page).fill('Crowd 088');
+    await list(page)
+      .getByRole('option', { name: /Crowd 088/ })
+      .click();
+    await expect(page.getByLabel('Active preset')).toHaveValue('crowd-088');
+    await page.reload();
+    await expect(page.getByLabel('Active preset')).toHaveValue('crowd-088');
   });
 });

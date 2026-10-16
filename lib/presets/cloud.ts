@@ -129,30 +129,108 @@ export async function signOut(): Promise<void> {
   }
 }
 
-/** Every shared preset. Another account's are marked `community`. Null when unreachable. */
-export async function pullPresets(accountId: string | null): Promise<Preset[] | null> {
+interface Row {
+  id: string;
+  user_id: string;
+  owner_name: string | null;
+  data: unknown;
+}
+
+function toPreset(row: Row, mine: boolean): Preset | null {
+  const parsed = parsePreset({ ...(row.data as object), id: row.id });
+  if (!parsed) return null;
+  return mine ? parsed : { ...parsed, builtIn: true, community: { ownerName: row.owner_name } };
+}
+
+/** Everything the signed-in account has saved (at most 100). Null when unreachable. */
+export async function pullOwn(accountId: string): Promise<Preset[] | null> {
   const c = getClient();
   if (!c) return null;
   try {
-    const { data, error } = await c.from(TABLE).select('id, user_id, owner_name, data');
+    const { data, error } = await c
+      .from(TABLE)
+      .select('id, user_id, owner_name, data')
+      .eq('user_id', accountId)
+      .order('updated_at', { ascending: false })
+      .limit(100);
     if (error || !data) return null;
-    const out: Preset[] = [];
-    const rows = data as {
-      id: string;
-      user_id: string;
-      owner_name: string | null;
-      data: unknown;
-    }[];
-    for (const row of rows) {
-      const parsed = parsePreset({ ...(row.data as object), id: row.id });
-      if (!parsed) continue;
-      out.push(
-        row.user_id === accountId
-          ? parsed
-          : { ...parsed, builtIn: true, community: { ownerName: row.owner_name } },
-      );
-    }
-    return out;
+    return (data as Row[]).flatMap((r) => toPreset(r, true) ?? []);
+  } catch {
+    return null;
+  }
+}
+
+export type SharedSort = 'new' | 'name';
+export const SHARED_PAGE = 40;
+
+/** What the search box may send: letters, digits, spaces and a few quiet marks. */
+export function cleanSearch(text: string): string {
+  return text
+    .replace(/[^\p{L}\p{N} ._'-]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 40);
+}
+
+export interface SharedPage {
+  presets: Preset[];
+  /** How many rows came back (continue from here for the next page). */
+  fetched: number;
+  /** True when a full page came back, so there may be more. */
+  more: boolean;
+}
+
+/**
+ * One page of other people's presets, newest first or by name, optionally filtered by a name
+ * or an author. Presets made by `accountId` are left out (they are listed as the account's own).
+ * Null when unreachable.
+ */
+export async function pullShared(opts: {
+  accountId: string | null;
+  query?: string;
+  sort?: SharedSort;
+  offset?: number;
+  limit?: number;
+}): Promise<SharedPage | null> {
+  const c = getClient();
+  if (!c) return null;
+  const limit = opts.limit ?? SHARED_PAGE;
+  const offset = opts.offset ?? 0;
+  try {
+    let q = c.from(TABLE).select('id, user_id, owner_name, data');
+    if (opts.accountId) q = q.neq('user_id', opts.accountId);
+    const text = cleanSearch(opts.query ?? '');
+    if (text) q = q.or(`name.ilike.%${text}%,owner_name.ilike.%${text}%`);
+    q =
+      opts.sort === 'name'
+        ? q.order('name', { ascending: true })
+        : q.order('updated_at', { ascending: false });
+    const { data, error } = await q.range(offset, offset + limit - 1);
+    if (error || !data) return null;
+    const rows = data as Row[];
+    return {
+      presets: rows.flatMap((r) => toPreset(r, false) ?? []),
+      fetched: rows.length,
+      more: rows.length === limit,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** One preset by id (a shared one the person picked last time), or null. */
+export async function pullPresetById(id: string, accountId: string | null): Promise<Preset | null> {
+  const c = getClient();
+  if (!c) return null;
+  try {
+    const { data, error } = await c
+      .from(TABLE)
+      .select('id, user_id, owner_name, data')
+      .eq('id', id)
+      .limit(1);
+    const row = (data as Row[] | null)?.[0];
+    if (error || !row) return null;
+    return toPreset(row, row.user_id === accountId);
   } catch {
     return null;
   }
