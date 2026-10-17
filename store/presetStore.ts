@@ -28,6 +28,8 @@ import {
   type Account,
 } from '@/lib/presets/cloud';
 import { toast } from 'sonner';
+import { isAdmin } from '@/lib/admin/api';
+import { clearPresetFromUrl, presetFromUrl } from '@/lib/presets/share';
 
 export type CloudStatus = 'off' | 'syncing' | 'synced' | 'offline';
 
@@ -52,6 +54,8 @@ interface PresetState {
   searchShared: (query: string) => void;
   setSharedSort: (sort: SharedSort) => void;
   loadMoreShared: () => void;
+  /** True for the site owner: shows the dashboard button (the database checks it again). */
+  isAdmin: boolean;
   /** The signed-in account. Saving a preset needs one whenever the online database is set up. */
   account: Account | null;
   /** The "sign in to save" dialog. */
@@ -244,7 +248,8 @@ export const usePresetStore = create<PresetState>((set, get) => {
       if (next) set({ account: next });
       return;
     }
-    set({ account: next });
+    set({ account: next, isAdmin: false });
+    if (next) void isAdmin().then((yes) => get().account?.id === next.id && set({ isAdmin: yes }));
     if (prev && !next) {
       // Signed out: this browser keeps none of that account's presets.
       const { presets, activeId } = get();
@@ -257,6 +262,29 @@ export const usePresetStore = create<PresetState>((set, get) => {
   };
 
   let watching = false;
+
+  /** Opens a preset someone shared a link to. */
+  const openShared = async (id: string) => {
+    let found = id === ORIGINAL_ID ? null : get().presets.find((p) => p.id === id);
+    if (!found && id !== ORIGINAL_ID && cloudConfigured()) {
+      const one = await pullPresetById(id, get().account?.id ?? null);
+      if (one) {
+        set({ presets: mergeShared(get().presets, [one]) });
+        found = get().presets.find((p) => p.id === id);
+      }
+    }
+    clearPresetFromUrl();
+    if (!found) {
+      if (id !== ORIGINAL_ID) toast.error('That preset link no longer works.');
+      return;
+    }
+    get().setActive(found.id);
+    toast.success(
+      found.community?.ownerName
+        ? `Using "${found.name}" by ${found.community.ownerName}.`
+        : `Using "${found.name}".`,
+    );
+  };
 
   return {
     presets: initialPresets(),
@@ -285,6 +313,7 @@ export const usePresetStore = create<PresetState>((set, get) => {
       if (get().sharedHasMore && !get().sharedLoading) void loadShared(false);
     },
     account: null,
+    isAdmin: false,
     signInOpen: false,
     setSignInOpen: (open) => set({ signInOpen: open }),
     ensureSignedIn: () => maySave(),
@@ -303,6 +332,9 @@ export const usePresetStore = create<PresetState>((set, get) => {
         watching = true;
         watchAccount(handleAccount);
       }
+      // A shared link: ?preset=<id> opens with that preset.
+      const shared = presetFromUrl();
+      if (shared) void openShared(shared);
     },
 
     setActive: (id) => {

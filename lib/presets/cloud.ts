@@ -38,6 +38,11 @@ function getClient(): SupabaseClient | null {
   return client;
 }
 
+/** The shared client (null when the database is not set up). */
+export function getCloudClient(): SupabaseClient | null {
+  return getClient();
+}
+
 /** Test hook: use a fake client (or null to switch the cloud off). */
 export function setCloudClient(next: SupabaseClient | null | undefined): void {
   client = next;

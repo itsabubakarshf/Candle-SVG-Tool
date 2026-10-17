@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useRef } from 'react';
-import { Copy, Download, Plus, Save, Trash2, Undo2, Upload } from 'lucide-react';
+import { Copy, Download, Link2, Plus, Save, Trash2, Undo2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { ColorField } from '@/components/ColorField';
 import { PresetBrowser } from '@/components/panel/PresetBrowser';
@@ -9,6 +9,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { downloadText } from '@/lib/export/download';
+import { copyText } from '@/lib/export/clipboard';
+import { shareLink } from '@/lib/presets/share';
 import type { CandleColors } from '@/lib/detect/types';
 import { ORIGINAL_ID } from '@/lib/presets/builtins';
 import { currentSourceStyle } from '@/lib/detect/hints';
@@ -26,6 +28,8 @@ export function ColorsTab() {
   const activeId = usePresetStore((s) => s.activeId);
   const draft = usePresetStore((s) => s.draft);
   const storageOk = usePresetStore((s) => s.storageOk);
+  const cloud = usePresetStore((s) => s.cloud);
+  const account = usePresetStore((s) => s.account);
   const ensureSignedIn = usePresetStore((s) => s.ensureSignedIn);
   const edit = usePresetStore(selectActivePreset);
   const editDraft = usePresetStore((s) => s.editDraft);
@@ -48,6 +52,17 @@ export function ColorsTab() {
 
   const active = presets.find((p) => p.id === activeId);
   const dirty = draft !== null;
+
+  // Built-ins always work; your own and shared presets work once they are in the shared library.
+  const shareable =
+    !!active && (active.builtIn || (cloud !== 'off' && account !== null)) && draft === null;
+  const onShare = async () => {
+    if (!active) return;
+    const ok = await copyText(shareLink(active.id));
+    if (ok)
+      toast.success('Link copied.', { description: `Anyone who opens it gets "${active.name}".` });
+    else toast.error('Could not copy the link.');
+  };
 
   const onImport = async (file: File) => {
     if (!ensureSignedIn()) return;
@@ -107,7 +122,21 @@ export function ColorsTab() {
             Delete
           </Button>
         </div>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-3 gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!shareable}
+            onClick={() => void onShare()}
+            title={
+              shareable
+                ? 'Copy a link that opens Crisper with this preset'
+                : 'Save the preset online first (sign in), then share it'
+            }
+          >
+            <Link2 className="h-3.5 w-3.5" aria-hidden />
+            Share
+          </Button>
           <Button variant="outline" size="sm" onClick={() => fileInput.current?.click()}>
             <Upload className="h-3.5 w-3.5" aria-hidden />
             Import

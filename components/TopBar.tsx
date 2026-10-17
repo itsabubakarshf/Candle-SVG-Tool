@@ -1,6 +1,7 @@
 'use client';
 
-import { Copy, Keyboard } from 'lucide-react';
+import Link from 'next/link';
+import { Copy, Keyboard, LayoutDashboard } from 'lucide-react';
 import { AccountButton } from '@/components/AccountButton';
 import { ThemeToggle } from '@/components/ThemeToggle';
 import { Button } from '@/components/ui/button';
@@ -22,6 +23,7 @@ export function TopBar() {
   const setShortcutsOpen = useUiStore((s) => s.setShortcutsOpen);
   const setTab = useUiStore((s) => s.setTab);
   const online = usePresetStore((s) => s.cloud !== 'off');
+  const isAdmin = usePresetStore((s) => s.isAdmin);
 
   return (
     <header className="flex flex-wrap items-center gap-3 border-b border-border px-4 py-2">
@@ -90,6 +92,14 @@ export function TopBar() {
             )}
           </select>
         </label>
+        {isAdmin && (
+          <Button variant="outline" size="sm" asChild>
+            <Link href="/admin">
+              <LayoutDashboard className="h-3.5 w-3.5" aria-hidden />
+              Dashboard
+            </Link>
+          </Button>
+        )}
         <AccountButton />
         <ThemeToggle />
         <Button

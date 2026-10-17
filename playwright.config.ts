@@ -11,10 +11,10 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   projects: [
-    { name: 'main', testIgnore: /signin\.spec\.ts/ },
+    { name: 'main', testIgnore: /(signin|admin)\.spec\.ts/ },
     {
       name: 'online-presets',
-      testMatch: /signin\.spec\.ts/,
+      testMatch: /(signin|admin)\.spec\.ts/,
       use: { baseURL: `http://localhost:${CLOUD_PORT}` },
     },
   ],
