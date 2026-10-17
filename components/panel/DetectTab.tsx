@@ -66,11 +66,11 @@ function DirectionRow() {
   const upColours = d.groups[up]?.colours ?? null;
   const downColours = d.groups[1 - up]?.colours ?? null;
   const why = {
-    structure: 'worked out from how the candles line up',
-    colour: 'from the usual green and red',
-    remembered: 'from your earlier answer',
-    user: 'your choice',
-    prior: 'a guess. Please check it',
+    structure: 'Worked out from how the candles line up.',
+    colour: 'Taken from the usual green and red.',
+    remembered: 'Set by your earlier answer.',
+    user: 'Set by your choice.',
+    prior: 'Not sure: this is a guess. Please check it.',
   }[d.source];
   const bg = result.sourceStyle.background;
   const swap = () => {
@@ -116,7 +116,7 @@ function DirectionRow() {
         }
         data-testid="direction-why"
       >
-        {d.sure ? `Decided ${why}.` : `Not sure: ${why}.`}
+        {why}
       </p>
       {original && (
         <p className="text-xs text-muted-foreground" data-testid="direction-original-note">
