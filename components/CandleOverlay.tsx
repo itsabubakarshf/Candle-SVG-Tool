@@ -49,7 +49,7 @@ export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
       height="100%"
       style={{ position: 'absolute', inset: 0, overflow: 'visible', pointerEvents: 'none' }}
     >
-      {/* a typed label replaces the letters of the screenshot, so they are covered, not doubled */}
+      {/* a typed label or a sticker replaces what is in the screenshot: covered, not doubled */}
       <g data-testid="text-covers">
         {extras.map((e) =>
           e.kind === 'text' && e.text.trim() !== '' && e.from && background ? (
@@ -59,6 +59,14 @@ export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
               y={e.from.y - 1}
               width={e.from.width + 2}
               height={e.from.height + 2}
+              fill={`rgb(${background[0]},${background[1]},${background[2]})`}
+            />
+          ) : e.kind === 'marker' && e.from && background ? (
+            <circle
+              key={e.id}
+              cx={e.from.cx}
+              cy={e.from.cy}
+              r={e.from.r + 1.5}
               fill={`rgb(${background[0]},${background[1]},${background[2]})`}
             />
           ) : null,

@@ -10,6 +10,7 @@ import {
   type MarkerExtra,
   type TextExtra,
 } from '@/lib/detect/types';
+import { MARKER_DOT_RATIO } from '@/lib/svg/extras';
 import {
   flipType,
   mergeCandles,
@@ -446,10 +447,9 @@ export const useChartStore = create<ChartState>((set, get) => {
         id,
         cx: x,
         cy: y,
-        r: 6,
-        dots: 8,
-        dotR: 1.5,
-        phase: 0,
+        r: 8,
+        dotR: 8 * MARKER_DOT_RATIO,
+        phase: -Math.PI / 4, // the empty place at the top right, as TradingView draws it
         color: readableOn(get().result?.background),
       };
       commitAll({ extras: [...get().extras, marker] });

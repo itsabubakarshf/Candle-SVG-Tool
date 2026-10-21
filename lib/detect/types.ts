@@ -143,13 +143,14 @@ export interface MarkerExtra {
   cy: number;
   /** Distance from the centre to each dot's centre. */
   r: number;
-  dots: number;
   /** Radius of one dot. */
   dotR: number;
-  /** Angle of the first dot, radians. */
+  /** Angle of the empty place in the ring, radians (0 = right, clockwise on screen). */
   phase: number;
   /** "#RRGGBB" */
   color: string;
+  /** Where it is in the screenshot. Never changes; covered so the original does not show. */
+  from?: { cx: number; cy: number; r: number };
 }
 
 export type Extra = LineExtra | BoxExtra | TextExtra | MarkerExtra;

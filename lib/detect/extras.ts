@@ -791,10 +791,37 @@ interface Ring {
 }
 
 /**
- * Small round dots of one size, spaced evenly around a circle: a ring marker. Dots are joined
+ * Small round dots of one size, spaced evenly around a circle: TradingView's dotted-circle
+ * sticker (PSP). It is 8 places with one left empty, like a loading sign. Dots are joined
  * to their nearest neighbours (a ring's dots are each other's nearest), then each group is
  * checked: same distance from its centre, spread all the way round, a hole in the middle.
  */
+/** Least-squares circle through the dots' centres (falls back to their mean). */
+function circleCentre(members: Comp[]): { cx: number; cy: number } {
+  const k = members.length;
+  const mx = members.reduce((a, m) => a + m.cx, 0) / k;
+  const my = members.reduce((a, m) => a + m.cy, 0) / k;
+  let suu = 0;
+  let svv = 0;
+  let suv = 0;
+  let su3 = 0;
+  let sv3 = 0;
+  for (const m of members) {
+    const u = m.cx - mx;
+    const v = m.cy - my;
+    suu += u * u;
+    svv += v * v;
+    suv += u * v;
+    su3 += u * u * u + u * v * v;
+    sv3 += v * v * v + v * u * u;
+  }
+  const det = suu * svv - suv * suv;
+  if (Math.abs(det) < 1e-9) return { cx: mx, cy: my };
+  const uc = (0.5 * (su3 * svv - sv3 * suv)) / det;
+  const vc = (0.5 * (sv3 * suu - su3 * suv)) / det;
+  return { cx: mx + uc, cy: my + vc };
+}
+
 export function findRings(comps: Comp[]): Ring[] {
   const dots = comps.filter((c) => {
     const w = c.x1 - c.x0 + 1;
@@ -827,8 +854,8 @@ export function findRings(comps: Comp[]): Ring[] {
   for (const members of groups.values()) {
     const k = members.length;
     if (k < 5 || k > 16) continue;
-    const cx = members.reduce((a, m) => a + m.cx, 0) / k;
-    const cy = members.reduce((a, m) => a + m.cy, 0) / k;
+    // the centre of the circle through the dots (their mean is pulled away from the empty place)
+    const { cx, cy } = circleCentre(members);
     const radii = members.map((m) => Math.hypot(m.cx - cx, m.cy - cy));
     const r = radii.reduce((a, b) => a + b, 0) / k;
     if (r < 3 || r > 90) continue;
@@ -846,15 +873,25 @@ export function findRings(comps: Comp[]): Ring[] {
       worst = Math.max(worst, b - a);
     }
     if (worst > 1.8 * step) continue;
-    // phase: the dots' angles folded onto one step, averaged on the circle
-    let sx = 0;
-    let sy = 0;
-    for (const a of angles) {
-      sx += Math.cos((a * 2 * Math.PI) / step);
-      sy += Math.sin((a * 2 * Math.PI) / step);
+    // phase: the middle of the widest gap, where the sticker has no dot
+    let phase = 0;
+    let widest = -1;
+    for (let i = 0; i < k; i++) {
+      const a = angles[i] as number;
+      const b = i + 1 < k ? (angles[i + 1] as number) : (angles[0] as number) + 2 * Math.PI;
+      if (b - a > widest) {
+        widest = b - a;
+        phase = (a + b) / 2;
+      }
     }
-    const phase = ((Math.atan2(sy, sx) * step) / (2 * Math.PI) + 2 * Math.PI) % step;
-    rings.push({ members, cx, cy, r, dotR: dotD / 2, phase });
+    rings.push({
+      members,
+      cx,
+      cy,
+      r,
+      dotR: dotD / 2,
+      phase: Math.atan2(Math.sin(phase), Math.cos(phase)),
+    });
   }
   return rings;
 }
@@ -957,16 +994,20 @@ export function findExtras(
         col[2] += c[2];
       }
       const n = Math.max(1, strong.length);
+      const cx = Math.round(ring.cx * 4) / 4;
+      const cy = Math.round(ring.cy * 4) / 4;
+      const r = Math.round(ring.r * 10) / 10;
+      const dotR = Math.max(0.5, Math.round(ring.dotR * 4) / 4);
       extras.push({
         kind: 'marker',
         id: nextId('marker'),
-        cx: half(ring.cx),
-        cy: half(ring.cy),
-        r: Math.round(ring.r * 10) / 10,
-        dots: ring.members.length,
-        dotR: Math.max(0.5, Math.round(ring.dotR * 4) / 4),
+        cx,
+        cy,
+        r,
+        dotR,
         phase: ring.phase,
         color: rgbToHex([col[0] / n, col[1] / n, col[2] / n]),
+        from: { cx, cy, r: r + dotR },
       });
       for (const m of ring.members) claimed.add(m);
       for (const p of pix) footprint[p] = 1;

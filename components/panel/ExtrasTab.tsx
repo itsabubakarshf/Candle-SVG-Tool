@@ -337,20 +337,11 @@ function MarkerForm({ marker }: { marker: MarkerExtra }) {
           }}
         />
         <Num
-          label="Dot size"
-          value={marker.dotR * 2}
-          min={0.25}
-          step={0.25}
-          onCommit={(v) => update(marker.id, { dotR: v / 2, r: Math.max(v / 2, size / 2 - v / 2) })}
+          label="Turn (degrees)"
+          value={Math.round((marker.phase * 180) / Math.PI)}
+          step={45}
+          onCommit={(v) => update(marker.id, { phase: (v * Math.PI) / 180 })}
         />
-        <Num
-          label="Dots"
-          value={marker.dots}
-          min={3}
-          step={1}
-          onCommit={(v) => update(marker.id, { dots: Math.min(24, Math.round(v)) })}
-        />
-        <span />
         <Num label="Centre x" value={marker.cx} onCommit={(v) => update(marker.id, { cx: v })} />
         <Num label="Centre y" value={marker.cy} onCommit={(v) => update(marker.id, { cy: v })} />
       </div>

@@ -55,11 +55,15 @@ export function textSvg(t: TextExtra, index: number): string {
   return `    <text id="Label ${pad(index + 1)}" x="${fmt(t.x)}" y="${fmt(t.y)}" font-family="${LABEL_FONT}" font-size="${fmt(t.size)}"${weightAttr(t)} fill="${t.color}">${escapeXml(t.text)}</text>`;
 }
 
-/** Centres of a ring marker's dots, first dot at `phase`, going round clockwise. */
+/** TradingView's dotted-circle sticker: 8 places round a circle, the one at `phase` empty. */
+export const MARKER_PLACES = 8;
+/** Its dot radius as a share of the ring radius, as TradingView draws it. */
+export const MARKER_DOT_RATIO = 0.22;
+
+/** Centres of the sticker's 7 dots, going round clockwise from the empty place. */
 export function markerDots(m: MarkerExtra): { x: number; y: number }[] {
-  const n = Math.max(1, Math.round(m.dots));
-  return Array.from({ length: n }, (_, i) => {
-    const a = m.phase + (i * 2 * Math.PI) / n;
+  return Array.from({ length: MARKER_PLACES - 1 }, (_, i) => {
+    const a = m.phase + ((i + 1) * 2 * Math.PI) / MARKER_PLACES;
     return { x: m.cx + m.r * Math.cos(a), y: m.cy + m.r * Math.sin(a) };
   });
 }

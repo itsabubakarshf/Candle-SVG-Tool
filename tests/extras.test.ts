@@ -327,12 +327,19 @@ describe('what is not found', () => {
 });
 
 describe('PSP sticker (dotted ring)', () => {
-  for (const file of ['psp-a.png', 'psp-b.png']) {
+  // where the empty place of the sticker is: top right, and turned to the bottom left
+  for (const [file, gap] of [
+    ['psp-a.png', -Math.PI / 4],
+    ['psp-b.png', (3 * Math.PI) / 4],
+  ] as const) {
     it(`${file}: the ring is one sticker and the chart counts as clean`, () => {
       const r = detect(load(file));
       const markers = r.extras.filter((e) => e.kind === 'marker') as MarkerExtra[];
       expect(markers).toHaveLength(1);
-      expect(markers[0]?.dots).toBeGreaterThanOrEqual(5);
+      const m = markers[0] as MarkerExtra;
+      expect(m.r).toBeGreaterThan(6);
+      expect(m.r).toBeLessThan(10);
+      expect(Math.abs(m.phase - gap)).toBeLessThan(0.3);
       expect(r.cleanliness.clean).toBe(true);
     });
   }
@@ -344,7 +351,6 @@ describe('PSP sticker (dotted ring)', () => {
       cx: 50,
       cy: 50,
       r: 6,
-      dots: 8,
       dotR: 1.5,
       phase: 0,
       color: '#123456',
@@ -353,6 +359,6 @@ describe('PSP sticker (dotted ring)', () => {
     expect(svg).toContain('<g id="Markers">');
     expect(svg.match(/<path /g)).toHaveLength(1);
     expect(svg).toContain('fill="#123456"');
-    expect(markerPath(m).match(/M/g)).toHaveLength(8);
+    expect(markerPath(m).match(/M/g)).toHaveLength(7);
   });
 });
