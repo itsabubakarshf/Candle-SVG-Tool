@@ -153,7 +153,8 @@ function findBoxes(
       const d = Math.hypot(r - tint[0], g - tint[1], b - tint[2]);
       if (d <= tol) match[p] = 1;
     }
-    const pieces = patches(match, width, height);
+    // a few stray pixels of the same colour (a faint line's edge) are not part of a box
+    const pieces = patches(match, width, height).filter((m) => m.size >= 24);
     // A candle (or its wick) cuts a box into pieces that share its top and bottom edge.
     const groups: Patch[][] = [];
     for (const piece of pieces) {
@@ -163,9 +164,16 @@ function findBoxes(
           const xOverlap = Math.min(m.x1, piece.x1) - Math.max(m.x0, piece.x0) + 1;
           const xGap = Math.max(m.x0, piece.x0) - Math.min(m.x1, piece.x1) - 1;
           const yGap = Math.max(m.y0, piece.y0) - Math.min(m.y1, piece.y1) - 1;
+          // the pieces of one box share its edges, within a little blur
+          const sameRows = Math.abs(m.y0 - piece.y0) <= 3 && Math.abs(m.y1 - piece.y1) <= 3;
+          const sameCols = Math.abs(m.x0 - piece.x0) <= 3 && Math.abs(m.x1 - piece.x1) <= 3;
           return (
-            (yOverlap >= 0.6 * Math.min(m.y1 - m.y0 + 1, piece.y1 - piece.y0 + 1) && xGap <= 120) ||
-            (xOverlap >= 0.6 * Math.min(m.x1 - m.x0 + 1, piece.x1 - piece.x0 + 1) && yGap <= 120)
+            (sameRows &&
+              yOverlap >= 0.6 * Math.min(m.y1 - m.y0 + 1, piece.y1 - piece.y0 + 1) &&
+              xGap <= 120) ||
+            (sameCols &&
+              xOverlap >= 0.6 * Math.min(m.x1 - m.x0 + 1, piece.x1 - piece.x0 + 1) &&
+              yGap <= 120)
           );
         }),
       );

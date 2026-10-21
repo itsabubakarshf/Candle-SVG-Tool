@@ -247,6 +247,14 @@ function BoxForm({ box }: { box: BoxExtra }) {
         onChange={(hex) => update(box.id, { fill: hex }, `box-fill:${box.id}`)}
       />
       <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        <Num
+          label="Opacity (%)"
+          value={Math.round((box.opacity ?? 1) * 100)}
+          min={0}
+          step={5}
+          onCommit={(v) => update(box.id, { opacity: Math.min(100, Math.max(0, v)) / 100 })}
+        />
+        <span />
         <Num label="Left" value={box.x} onCommit={(v) => update(box.id, { x: v })} />
         <Num label="Top" value={box.y} onCommit={(v) => update(box.id, { y: v })} />
         <Num

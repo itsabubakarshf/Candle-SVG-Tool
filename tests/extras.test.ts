@@ -24,7 +24,7 @@ import {
   type SynthCandle,
   type SynthStyle,
 } from './synth/generate';
-import { frontLayers, markerPath } from '@/lib/svg/extras';
+import { boxesLayer, frontLayers, markerPath } from '@/lib/svg/extras';
 
 const load = (name: string): PixelImage => {
   const p = PNG.sync.read(fs.readFileSync(path.join(__dirname, 'fixtures', name)));
@@ -364,5 +364,29 @@ describe('PSP sticker (dotted ring)', () => {
     expect(markerPath(m).match(/M/g)).toHaveLength(7);
     expect(svg).not.toContain('fill-opacity');
     expect(frontLayers([{ ...m, opacity: 0.5 }]).join('\n')).toContain('fill-opacity="0.5"');
+  });
+});
+
+describe('a pale box behind a candle (gap)', () => {
+  it('is found in its exact colour and the chart counts as clean', () => {
+    const r = detect(load('gap-box.png'));
+    const b = boxes(r);
+    expect(b).toHaveLength(1);
+    expect(b[0]).toMatchObject({ x: 23, y: 243, width: 84, height: 75, fill: '#F0F0F0' });
+    expect(r.cleanliness.clean).toBe(true);
+  });
+
+  it('exports opacity only when it is set', () => {
+    const box: BoxExtra = {
+      kind: 'box',
+      id: 'box-01',
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10,
+      fill: '#F0F0F0',
+    };
+    expect(boxesLayer([box]).join('')).not.toContain('fill-opacity');
+    expect(boxesLayer([{ ...box, opacity: 0.4 }]).join('')).toContain('fill-opacity="0.4"');
   });
 });

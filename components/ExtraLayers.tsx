@@ -30,6 +30,7 @@ export function ExtraShapes({ extras, layer }: { extras: Extra[]; layer: 'below'
             width={b.width}
             height={b.height}
             fill={b.fill}
+            fillOpacity={b.opacity ?? 1}
           />
         ))}
       </g>

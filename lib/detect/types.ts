@@ -105,6 +105,8 @@ export interface BoxExtra {
   height: number;
   /** "#RRGGBB", as it looks on the chart (already blended with the background). */
   fill: string;
+  /** 0..1; missing means fully opaque. */
+  opacity?: number;
 }
 
 export interface TextExtra {

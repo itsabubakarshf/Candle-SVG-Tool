@@ -34,8 +34,12 @@ export function byKind(extras: Extra[]) {
   };
 }
 
+/** fill-opacity only when it is not fully opaque */
+const opacityAttr = (o: number | undefined) =>
+  o !== undefined && o < 1 ? ` fill-opacity="${fmt(o)}"` : '';
+
 export function boxSvg(b: BoxExtra, index: number): string {
-  return `    <rect id="Box ${pad(index + 1)}" x="${fmt(b.x)}" y="${fmt(b.y)}" width="${fmt(b.width)}" height="${fmt(b.height)}" fill="${b.fill}"/>`;
+  return `    <rect id="Box ${pad(index + 1)}" x="${fmt(b.x)}" y="${fmt(b.y)}" width="${fmt(b.width)}" height="${fmt(b.height)}" fill="${b.fill}"${opacityAttr(b.opacity)}/>`;
 }
 
 export function lineSvg(l: LineExtra, index: number): string {
@@ -80,9 +84,7 @@ export function markerPath(m: MarkerExtra): string {
 }
 
 export function markerSvg(m: MarkerExtra, index: number): string {
-  const opacity =
-    m.opacity !== undefined && m.opacity < 1 ? ` fill-opacity="${fmt(m.opacity)}"` : '';
-  return `    <path id="Marker ${pad(index + 1)}" d="${markerPath(m)}" fill="${m.color}"${opacity}/>`;
+  return `    <path id="Marker ${pad(index + 1)}" d="${markerPath(m)}" fill="${m.color}"${opacityAttr(m.opacity)}/>`;
 }
 
 /** Boxes go behind the candles. */
