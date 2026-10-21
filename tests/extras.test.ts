@@ -25,6 +25,7 @@ import {
   type SynthStyle,
 } from './synth/generate';
 import { boxesLayer, frontLayers, markerPath } from '@/lib/svg/extras';
+import { DEFAULT_BOX_STYLES, applyBoxStyles, matchBoxStyle } from '@/lib/edit/boxStyles';
 
 const load = (name: string): PixelImage => {
   const p = PNG.sync.read(fs.readFileSync(path.join(__dirname, 'fixtures', name)));
@@ -388,5 +389,34 @@ describe('a pale box behind a candle (gap)', () => {
     };
     expect(boxesLayer([box]).join('')).not.toContain('fill-opacity');
     expect(boxesLayer([{ ...box, opacity: 0.4 }]).join('')).toContain('fill-opacity="0.4"');
+  });
+});
+
+describe('box styles (see-through boxes)', () => {
+  it("TradingView's #B8B8B8 at 21 % on white is what the screenshot shows as #F0F0F0", () => {
+    const [b] = applyBoxStyles(
+      [{ kind: 'box', id: 'box-01', x: 0, y: 0, width: 10, height: 10, fill: '#F0F0F0' }],
+      [255, 255, 255],
+      DEFAULT_BOX_STYLES,
+    );
+    expect(b).toMatchObject({ fill: '#B8B8B8', opacity: 0.21 });
+  });
+
+  it('a box no known style explains keeps the colour it has', () => {
+    const [b] = applyBoxStyles(
+      [{ kind: 'box', id: 'box-01', x: 0, y: 0, width: 10, height: 10, fill: '#E0F0FF' }],
+      [255, 255, 255],
+      DEFAULT_BOX_STYLES,
+    );
+    expect(b).toMatchObject({ fill: '#E0F0FF' });
+    expect((b as BoxExtra).opacity).toBeUndefined();
+  });
+
+  it('a style the person set is matched over a dark background too', () => {
+    const style = { color: '#2962FF', opacity: 0.2 };
+    const bg: [number, number, number] = [19, 23, 34];
+    const seen = [0x29, 0x62, 0xff].map((v, i) => Math.round(v * 0.2 + (bg[i] as number) * 0.8));
+    const hex = `#${seen.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+    expect(matchBoxStyle(hex, bg, [style])).toEqual(style);
   });
 });

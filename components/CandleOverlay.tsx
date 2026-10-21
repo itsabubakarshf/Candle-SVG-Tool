@@ -61,6 +61,15 @@ export function CandleOverlay({ width, height, cssScale }: CandleOverlayProps) {
               height={e.from.height + 2}
               fill={`rgb(${background[0]},${background[1]},${background[2]})`}
             />
+          ) : e.kind === 'box' && e.opacity !== undefined && e.opacity < 1 && background ? (
+            <rect
+              key={e.id}
+              x={e.x}
+              y={e.y}
+              width={e.width}
+              height={e.height}
+              fill={`rgb(${background[0]},${background[1]},${background[2]})`}
+            />
           ) : e.kind === 'marker' && e.from && background ? (
             <circle
               key={e.id}

@@ -11,6 +11,7 @@ import {
   type TextExtra,
 } from '@/lib/detect/types';
 import { MARKER_DOT_RATIO } from '@/lib/svg/extras';
+import { applyBoxStyles, loadBoxStyles, rememberBoxStyle } from '@/lib/edit/boxStyles';
 import {
   flipType,
   mergeCandles,
@@ -105,6 +106,8 @@ interface ChartState {
 }
 
 let detectToken = 0;
+/** The style last remembered for a box, so picking a colour keeps only the one picked last. */
+let lastBoxStyle: { id: string; style: { color: string; opacity: number } } | null = null;
 let lastCoalesceKey = '';
 let lastCoalesceAt = 0;
 
@@ -220,6 +223,11 @@ export const useChartStore = create<ChartState>((set, get) => {
         // A colour pair the person has already answered for is never asked about again.
         const recalled = useHintStore.getState().recall(result.direction);
         if (recalled !== null) result = withUpGroup(result, recalled, 'remembered');
+        // a see-through box is shown in the colour and opacity it was drawn with, when known
+        result = {
+          ...result,
+          extras: applyBoxStyles(result.extras, result.background, loadBoxStyles()),
+        };
         if (opts?.undoable) commitAll({ candles: result.candles, extras: result.extras });
         else set({ candles: result.candles, extras: result.extras, past: [], future: [] });
         set({
@@ -402,11 +410,21 @@ export const useChartStore = create<ChartState>((set, get) => {
           ? { editingExtraId: null }
           : { editingExtraId: id, selectedExtraId: id, selectedIds: [] },
       ),
-    updateExtra: (id, patch, coalesceKey) =>
-      commitAll(
-        { extras: get().extras.map((e) => (e.id === id ? ({ ...e, ...patch } as Extra) : e)) },
-        coalesceKey ?? `extra:${id}`,
-      ),
+    updateExtra: (id, patch, coalesceKey) => {
+      const extras = get().extras.map((e) => (e.id === id ? ({ ...e, ...patch } as Extra) : e));
+      commitAll({ extras }, coalesceKey ?? `extra:${id}`);
+      // a see-through box style the person sets is used for the next screenshots too
+      const box = extras.find((e) => e.id === id);
+      if (
+        box?.kind === 'box' &&
+        box.opacity !== undefined &&
+        ('opacity' in patch || 'fill' in patch)
+      ) {
+        const style = { color: box.fill, opacity: box.opacity };
+        rememberBoxStyle(style, lastBoxStyle?.id === id ? lastBoxStyle.style : undefined);
+        lastBoxStyle = { id, style };
+      }
+    },
     dragExtra: (id, patch) =>
       set((s) => ({
         extras: s.extras.map((e) => (e.id === id ? ({ ...e, ...patch } as Extra) : e)),
