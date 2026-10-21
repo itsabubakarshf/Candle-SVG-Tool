@@ -7,6 +7,7 @@ import {
   DEFAULT_SETTINGS,
   type BoxExtra,
   type LineExtra,
+  type MarkerExtra,
   type PixelImage,
   type TextExtra,
 } from '@/lib/detect/types';
@@ -23,6 +24,7 @@ import {
   type SynthCandle,
   type SynthStyle,
 } from './synth/generate';
+import { frontLayers, markerPath } from '@/lib/svg/extras';
 
 const load = (name: string): PixelImage => {
   const p = PNG.sync.read(fs.readFileSync(path.join(__dirname, 'fixtures', name)));
@@ -321,5 +323,36 @@ describe('what is not found', () => {
     const c = layout(mixed(7), { style: TV_DEFAULT, pitch: 40, height: 300 });
     const r = detect(renderChart(c).image);
     expect(r.extras).toEqual([]);
+  });
+});
+
+describe('PSP sticker (dotted ring)', () => {
+  for (const file of ['psp-a.png', 'psp-b.png']) {
+    it(`${file}: the ring is one sticker and the chart counts as clean`, () => {
+      const r = detect(load(file));
+      const markers = r.extras.filter((e) => e.kind === 'marker') as MarkerExtra[];
+      expect(markers).toHaveLength(1);
+      expect(markers[0]?.dots).toBeGreaterThanOrEqual(5);
+      expect(r.cleanliness.clean).toBe(true);
+    });
+  }
+
+  it('exports as one path with one fill', () => {
+    const m: MarkerExtra = {
+      kind: 'marker',
+      id: 'marker-01',
+      cx: 50,
+      cy: 50,
+      r: 6,
+      dots: 8,
+      dotR: 1.5,
+      phase: 0,
+      color: '#123456',
+    };
+    const svg = frontLayers([m]).join('\n');
+    expect(svg).toContain('<g id="Markers">');
+    expect(svg.match(/<path /g)).toHaveLength(1);
+    expect(svg).toContain('fill="#123456"');
+    expect(markerPath(m).match(/M/g)).toHaveLength(8);
   });
 });

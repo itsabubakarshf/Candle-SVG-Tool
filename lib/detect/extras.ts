@@ -781,6 +781,84 @@ function isCandleEdge(l: LineExtra, candles: CandleExtent[]): boolean {
   return false;
 }
 
+interface Ring {
+  members: Comp[];
+  cx: number;
+  cy: number;
+  r: number;
+  dotR: number;
+  phase: number;
+}
+
+/**
+ * Small round dots of one size, spaced evenly around a circle: a ring marker. Dots are joined
+ * to their nearest neighbours (a ring's dots are each other's nearest), then each group is
+ * checked: same distance from its centre, spread all the way round, a hole in the middle.
+ */
+export function findRings(comps: Comp[]): Ring[] {
+  const dots = comps.filter((c) => {
+    const w = c.x1 - c.x0 + 1;
+    const h = c.y1 - c.y0 + 1;
+    return c.size >= 1 && w <= 12 && h <= 12 && Math.max(w, h) <= 2 * Math.min(w, h) + 1;
+  });
+  if (dots.length < 5 || dots.length > 3000) return [];
+  const n = dots.length;
+  const dist = (a: Comp, b: Comp) => Math.hypot(a.cx - b.cx, a.cy - b.cy);
+  const nn = dots.map((a) => {
+    let best = Infinity;
+    for (const b of dots) if (b !== a) best = Math.min(best, dist(a, b));
+    return best;
+  });
+  const parent = dots.map((_, i) => i);
+  const find = (i: number): number =>
+    parent[i] === i ? i : (parent[i] = find(parent[i] as number));
+  for (let i = 0; i < n; i++) {
+    for (let j = i + 1; j < n; j++) {
+      const d = dist(dots[i] as Comp, dots[j] as Comp);
+      if (d <= 1.45 * Math.min(nn[i] as number, nn[j] as number) + 1) parent[find(i)] = find(j);
+    }
+  }
+  const groups = new Map<number, Comp[]>();
+  dots.forEach((d, i) => {
+    const k = find(i);
+    groups.set(k, [...(groups.get(k) ?? []), d]);
+  });
+  const rings: Ring[] = [];
+  for (const members of groups.values()) {
+    const k = members.length;
+    if (k < 5 || k > 16) continue;
+    const cx = members.reduce((a, m) => a + m.cx, 0) / k;
+    const cy = members.reduce((a, m) => a + m.cy, 0) / k;
+    const radii = members.map((m) => Math.hypot(m.cx - cx, m.cy - cy));
+    const r = radii.reduce((a, b) => a + b, 0) / k;
+    if (r < 3 || r > 90) continue;
+    if (Math.max(...radii.map((x) => Math.abs(x - r))) > 0.22 * r + 0.6) continue;
+    const sizes = members.map((m) => (m.x1 - m.x0 + 1 + (m.y1 - m.y0 + 1)) / 2);
+    const dotD = sizes.reduce((a, b) => a + b, 0) / k;
+    if (r < 1.1 * dotD) continue; // a blob, not a ring
+    if (Math.max(...sizes) > 2.2 * Math.min(...sizes) + 1) continue;
+    const angles = members.map((m) => Math.atan2(m.cy - cy, m.cx - cx)).sort((a, b) => a - b);
+    const step = (2 * Math.PI) / k;
+    let worst = 0;
+    for (let i = 0; i < k; i++) {
+      const a = angles[i] as number;
+      const b = i + 1 < k ? (angles[i + 1] as number) : (angles[0] as number) + 2 * Math.PI;
+      worst = Math.max(worst, b - a);
+    }
+    if (worst > 1.8 * step) continue;
+    // phase: the dots' angles folded onto one step, averaged on the circle
+    let sx = 0;
+    let sy = 0;
+    for (const a of angles) {
+      sx += Math.cos((a * 2 * Math.PI) / step);
+      sy += Math.sin((a * 2 * Math.PI) / step);
+    }
+    const phase = ((Math.atan2(sy, sx) * step) / (2 * Math.PI) + 2 * Math.PI) % step;
+    rings.push({ members, cx, cy, r, dotR: dotD / 2, phase });
+  }
+  return rings;
+}
+
 export function findExtras(
   image: PixelImage,
   background: Rgb,
@@ -796,8 +874,9 @@ export function findExtras(
   const { area, body } = candleMask(candles, width, height, lossy ? 6 : 2);
   const footprint = new Uint8Array(width * height);
   const extras: Extra[] = [];
-  const counters = { line: 0, box: 0, text: 0 };
-  const nextId = (k: 'line' | 'box' | 'text') => `${k}-${String(++counters[k]).padStart(2, '0')}`;
+  const counters = { line: 0, box: 0, text: 0, marker: 0 };
+  const nextId = (k: 'line' | 'box' | 'text' | 'marker') =>
+    `${k}-${String(++counters[k]).padStart(2, '0')}`;
 
   // ---- boxes
   const ink = new Float32Array(de); // ΔE from whatever is behind (the background, or a box)
@@ -863,6 +942,36 @@ export function findExtras(
 
   const claimed = new Set<Comp>();
   const pixelsOf = (cs: Comp[]) => cs.flatMap((c) => c.px);
+
+  // ---- rings of dots (the PSP marker): one shape, found before dotted lines can take its dots
+  if (!options.patternedOnly) {
+    for (const ring of findRings(comps)) {
+      const pix = pixelsOf(ring.members);
+      const peak = Math.max(...ring.members.map((c) => c.peak));
+      const strong = pix.filter((p) => (ink[p] as number) >= 0.8 * peak);
+      const col: Rgb = [0, 0, 0];
+      for (const p of strong) {
+        const c = rgbAt(image, p);
+        col[0] += c[0];
+        col[1] += c[1];
+        col[2] += c[2];
+      }
+      const n = Math.max(1, strong.length);
+      extras.push({
+        kind: 'marker',
+        id: nextId('marker'),
+        cx: half(ring.cx),
+        cy: half(ring.cy),
+        r: Math.round(ring.r * 10) / 10,
+        dots: ring.members.length,
+        dotR: Math.max(0.5, Math.round(ring.dotR * 4) / 4),
+        phase: ring.phase,
+        color: rgbToHex([col[0] / n, col[1] / n, col[2] / n]),
+      });
+      for (const m of ring.members) claimed.add(m);
+      for (const p of pix) footprint[p] = 1;
+    }
+  }
 
   // How the pieces of one line follow each other, and which gaps a candle explains.
   const piecesAlong = (members: Comp[]) => {

@@ -14,6 +14,7 @@ export function describeExtras(extras: Extra[]): string {
     n('line') > 0 ? plural(n('line'), 'line', 'lines') : '',
     n('box') > 0 ? plural(n('box'), 'box', 'boxes') : '',
     n('text') > 0 ? plural(n('text'), 'label', 'labels') : '',
+    n('marker') > 0 ? plural(n('marker'), 'sticker', 'stickers') : '',
   ].filter(Boolean);
   return parts.length > 1
     ? `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`

@@ -1,8 +1,8 @@
 'use client';
 
 import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
-import type { BoxExtra, Extra, LineExtra, TextExtra } from '@/lib/detect/types';
-import { LABEL_FONT, byKind } from '@/lib/svg/extras';
+import type { BoxExtra, Extra, LineExtra, MarkerExtra, TextExtra } from '@/lib/detect/types';
+import { LABEL_FONT, byKind, markerPath } from '@/lib/svg/extras';
 import { useChartStore } from '@/store/chartStore';
 import { useUiStore } from '@/store/uiStore';
 
@@ -17,7 +17,7 @@ export function textBox(t: TextExtra) {
 
 /** The shapes themselves, drawn the same way the SVG export draws them. */
 export function ExtraShapes({ extras, layer }: { extras: Extra[]; layer: 'below' | 'above' }) {
-  const { boxes, lines, texts } = byKind(extras);
+  const { boxes, lines, texts, markers } = byKind(extras);
   if (layer === 'below') {
     return (
       <g data-testid="overlay-boxes">
@@ -50,6 +50,9 @@ export function ExtraShapes({ extras, layer }: { extras: Extra[]; layer: 'below'
           strokeLinecap="butt"
           strokeDasharray={l.dash ? `${l.dash[0]} ${l.dash[1]}` : undefined}
         />
+      ))}
+      {markers.map((m) => (
+        <path key={m.id} data-extra={m.id} d={markerPath(m)} fill={m.color} />
       ))}
       {texts.map((t) =>
         t.text.trim() === '' && t.trace ? (
@@ -136,6 +139,9 @@ export function ExtraHits({
     } else if (extra.kind === 'box') {
       const { x, y } = extra;
       startDrag(e, (dx, dy) => dragExtra(extra.id, { x: x + dx, y: y + dy }));
+    } else if (extra.kind === 'marker') {
+      const { cx, cy } = extra;
+      startDrag(e, (dx, dy) => dragExtra(extra.id, { cx: cx + dx, cy: cy + dy }));
     } else {
       const { x, y, region } = extra;
       startDrag(e, (dx, dy) =>
@@ -200,6 +206,29 @@ export function ExtraHits({
                 onPointerDown={(e) => dragBody(e, extra)}
               />
               {selected && <BoxHandles box={extra} r={5 * px} startDrag={startDrag} />}
+            </g>
+          );
+        }
+        if (extra.kind === 'marker') {
+          const outer = extra.r + extra.dotR;
+          return (
+            <g key={extra.id}>
+              <circle
+                data-testid={`extra-hit-${extra.id}`}
+                cx={extra.cx}
+                cy={extra.cy}
+                r={outer + 2 * px}
+                fill="transparent"
+                stroke={selected ? '#3B82F6' : 'none'}
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                vectorEffect="non-scaling-stroke"
+                style={{ pointerEvents: 'all', cursor: 'move' }}
+                onPointerDown={(e) => dragBody(e, extra)}
+              >
+                <title>Sticker. Drag to move, pull the handle to resize.</title>
+              </circle>
+              {selected && <MarkerHandle marker={extra} r={5 * px} startDrag={startDrag} />}
             </g>
           );
         }
@@ -382,6 +411,37 @@ function BoxHandles({ box, r, startDrag }: { box: BoxExtra; r: number; startDrag
         }
       />
     </>
+  );
+}
+
+/** One handle at the lower right of the ring; dragging it scales the whole sticker. */
+function MarkerHandle({
+  marker,
+  r,
+  startDrag,
+}: {
+  marker: MarkerExtra;
+  r: number;
+  startDrag: StartDrag;
+}) {
+  const dragExtra = useChartStore((s) => s.dragExtra);
+  const { cx, cy, r: ringR, dotR } = marker;
+  const outer = ringR + dotR;
+  const d = outer / Math.SQRT2;
+  return (
+    <Dot
+      x={cx + d}
+      y={cy + d}
+      r={r}
+      testId="extra-handle-size"
+      cursor="nwse-resize"
+      onDown={(e) =>
+        startDrag(e, (dx, dy) => {
+          const k = Math.max(0.1, (outer + (dx + dy) / Math.SQRT2) / outer);
+          dragExtra(marker.id, { r: ringR * k, dotR: dotR * k });
+        })
+      }
+    />
   );
 }
 

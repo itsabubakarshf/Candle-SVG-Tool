@@ -1,10 +1,10 @@
 'use client';
 
-import { Minus, Plus, Square, Trash2, Type } from 'lucide-react';
+import { CircleDashed, Minus, Plus, Square, Trash2, Type } from 'lucide-react';
 import { ColorField } from '@/components/ColorField';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import type { BoxExtra, Extra, LineExtra, TextExtra } from '@/lib/detect/types';
+import type { BoxExtra, Extra, LineExtra, MarkerExtra, TextExtra } from '@/lib/detect/types';
 import { byKind } from '@/lib/svg/extras';
 import { useChartStore } from '@/store/chartStore';
 
@@ -14,6 +14,7 @@ export function ExtrasTab() {
   const selectedId = useChartStore((s) => s.selectedExtraId);
   const selectExtra = useChartStore((s) => s.selectExtra);
   const addText = useChartStore((s) => s.addText);
+  const addMarker = useChartStore((s) => s.addMarker);
   const deleteExtra = useChartStore((s) => s.deleteExtra);
 
   if (!image) {
@@ -23,7 +24,7 @@ export function ExtrasTab() {
       </p>
     );
   }
-  const { boxes, lines } = byKind(extras);
+  const { boxes, lines, markers } = byKind(extras);
   const texts = extras.filter((e): e is TextExtra => e.kind === 'text');
   const selected = extras.find((e) => e.id === selectedId);
   const unread = texts.filter((t) => t.text.trim() === '').length;
@@ -36,7 +37,11 @@ export function ExtrasTab() {
             ? 'No lines, boxes or labels found.'
             : `${lines.length} ${lines.length === 1 ? 'line' : 'lines'}, ${boxes.length} ${
                 boxes.length === 1 ? 'box' : 'boxes'
-              }, ${texts.length} ${texts.length === 1 ? 'label' : 'labels'}`}
+              }, ${texts.length} ${texts.length === 1 ? 'label' : 'labels'}${
+                markers.length > 0
+                  ? `, ${markers.length} ${markers.length === 1 ? 'sticker' : 'stickers'}`
+                  : ''
+              }`}
         </p>
         {unread > 0 && (
           <p className="text-sm text-amber-600 dark:text-amber-400" data-testid="unread-count">
@@ -45,23 +50,34 @@ export function ExtrasTab() {
           </p>
         )}
         <p className="text-xs text-muted-foreground">
-          They are copied into the SVG with the candles: boxes behind, lines and labels in front.
-          Click one on the picture to move or fix it. Double-click empty space to add a label.
+          They are copied into the SVG with the candles: boxes behind, lines, stickers and labels in
+          front. Click one on the picture to move or fix it. Double-click empty space to add a
+          label.
         </p>
       </section>
 
-      <Button
-        variant="outline"
-        size="sm"
-        onClick={() => addText(image.width / 2, image.height / 2)}
-      >
-        <Plus className="h-3.5 w-3.5" aria-hidden />
-        Add label
-      </Button>
+      <div className="flex flex-wrap gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => addText(image.width / 2, image.height / 2)}
+        >
+          <Plus className="h-3.5 w-3.5" aria-hidden />
+          Add label
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => addMarker(image.width / 2, image.height / 2)}
+        >
+          <CircleDashed className="h-3.5 w-3.5" aria-hidden />
+          Add PSP sticker
+        </Button>
+      </div>
 
       {extras.length > 0 && (
         <section aria-label="List" className="space-y-1">
-          {[...boxes, ...lines, ...texts].map((e) => (
+          {[...boxes, ...lines, ...markers, ...texts].map((e) => (
             <button
               key={e.id}
               type="button"
@@ -82,6 +98,7 @@ export function ExtrasTab() {
           {selected.kind === 'line' && <LineForm line={selected} />}
           {selected.kind === 'box' && <BoxForm box={selected} />}
           {selected.kind === 'text' && <TextForm text={selected} />}
+          {selected.kind === 'marker' && <MarkerForm marker={selected} />}
           <Button variant="outline" size="sm" onClick={() => deleteExtra(selected.id)}>
             <Trash2 className="h-3.5 w-3.5" aria-hidden />
             Delete
@@ -96,6 +113,7 @@ function KindIcon({ extra }: { extra: Extra }) {
   const cls = 'h-3.5 w-3.5 shrink-0 text-muted-foreground';
   if (extra.kind === 'line') return <Minus className={cls} aria-hidden />;
   if (extra.kind === 'box') return <Square className={cls} aria-hidden />;
+  if (extra.kind === 'marker') return <CircleDashed className={cls} aria-hidden />;
   return <Type className={cls} aria-hidden />;
 }
 
@@ -106,6 +124,7 @@ function describe(e: Extra): string {
     return `Line, ${style}, ${len} px`;
   }
   if (e.kind === 'box') return `Box, ${Math.round(e.width)} × ${Math.round(e.height)}`;
+  if (e.kind === 'marker') return `PSP sticker, ${Math.round(markerSize(e))} px`;
   return e.text.trim() === '' ? 'Label (not read)' : `Label: ${e.text}`;
 }
 
@@ -283,6 +302,57 @@ function TextForm({ text }: { text: TextExtra }) {
         <span />
         <Num label="Left" value={text.x} onCommit={(v) => update(text.id, { x: v })} />
         <Num label="Baseline" value={text.y} onCommit={(v) => update(text.id, { y: v })} />
+      </div>
+    </div>
+  );
+}
+
+/** Outside diameter of the sticker, dot edge to dot edge. */
+const markerSize = (m: MarkerExtra) => 2 * (m.r + m.dotR);
+
+function MarkerForm({ marker }: { marker: MarkerExtra }) {
+  const update = useChartStore((s) => s.updateExtra);
+  const size = markerSize(marker);
+  return (
+    <div className="space-y-3">
+      <h3 className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        PSP sticker
+      </h3>
+      <p className="text-xs text-muted-foreground">
+        One shape in the SVG. Colour and size change the whole ring.
+      </p>
+      <ColorField
+        label="Colour"
+        value={marker.color}
+        onChange={(hex) => update(marker.id, { color: hex }, `marker-color:${marker.id}`)}
+      />
+      <div className="grid grid-cols-2 gap-x-3 gap-y-2">
+        <Num
+          label="Size"
+          value={size}
+          min={2}
+          onCommit={(v) => {
+            const k = v / size;
+            update(marker.id, { r: marker.r * k, dotR: marker.dotR * k });
+          }}
+        />
+        <Num
+          label="Dot size"
+          value={marker.dotR * 2}
+          min={0.25}
+          step={0.25}
+          onCommit={(v) => update(marker.id, { dotR: v / 2, r: Math.max(v / 2, size / 2 - v / 2) })}
+        />
+        <Num
+          label="Dots"
+          value={marker.dots}
+          min={3}
+          step={1}
+          onCommit={(v) => update(marker.id, { dots: Math.min(24, Math.round(v)) })}
+        />
+        <span />
+        <Num label="Centre x" value={marker.cx} onCommit={(v) => update(marker.id, { cx: v })} />
+        <Num label="Centre y" value={marker.cy} onCommit={(v) => update(marker.id, { cy: v })} />
       </div>
     </div>
   );

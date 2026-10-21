@@ -7,6 +7,7 @@ import {
   type DetectSettings,
   type DetectionResult,
   type Extra,
+  type MarkerExtra,
   type TextExtra,
 } from '@/lib/detect/types';
 import {
@@ -75,6 +76,8 @@ interface ChartState {
   dragExtra: (id: string, patch: Partial<Extra>) => void;
   deleteExtra: (id: string) => void;
   addText: (x: number, y: number) => string;
+  /** A dotted-circle sticker (PSP) centred at x, y. */
+  addMarker: (x: number, y: number) => string;
   /** What OCR read. Not an undo step; never overwrites what the user typed. */
   applyReadText: (id: string, text: string | null) => void;
 
@@ -431,6 +434,26 @@ export const useChartStore = create<ChartState>((set, get) => {
       };
       commitAll({ extras: [...get().extras, text] });
       set({ selectedExtraId: id, selectedIds: [], activeHandle: null, editingExtraId: id });
+      return id;
+    },
+    addMarker: (x, y) => {
+      const used = new Set(get().extras.map((e) => e.id));
+      let n = 1;
+      while (used.has(`marker-${String(n).padStart(2, '0')}`)) n++;
+      const id = `marker-${String(n).padStart(2, '0')}`;
+      const marker: MarkerExtra = {
+        kind: 'marker',
+        id,
+        cx: x,
+        cy: y,
+        r: 6,
+        dots: 8,
+        dotR: 1.5,
+        phase: 0,
+        color: readableOn(get().result?.background),
+      };
+      commitAll({ extras: [...get().extras, marker] });
+      set({ selectedExtraId: id, selectedIds: [], activeHandle: null, editingExtraId: null });
       return id;
     },
     applyReadText: (id, text) =>

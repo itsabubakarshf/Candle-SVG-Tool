@@ -1,4 +1,4 @@
-import type { BoxExtra, Extra, LineExtra, TextExtra } from '@/lib/detect/types';
+import type { BoxExtra, Extra, LineExtra, MarkerExtra, TextExtra } from '@/lib/detect/types';
 import { fmt } from './format';
 
 /** Font stack for labels. Figma replaces it with the nearest font it has. */
@@ -20,8 +20,8 @@ export function byKind(extras: Extra[]) {
   const key = (e: Extra) =>
     e.kind === 'line'
       ? e.y1 * 10000 + e.x1
-      : e.kind === 'box'
-        ? e.y * 10000 + e.x
+      : e.kind === 'marker'
+        ? e.cy * 10000 + e.cx
         : e.y * 10000 + e.x;
   return {
     boxes: sorted(extras.filter((e) => e.kind === 'box')) as BoxExtra[],
@@ -30,6 +30,7 @@ export function byKind(extras: Extra[]) {
     texts: sorted(
       extras.filter((e) => e.kind === 'text' && (e.text.trim() !== '' || e.trace)),
     ) as TextExtra[],
+    markers: sorted(extras.filter((e) => e.kind === 'marker')) as MarkerExtra[],
   };
 }
 
@@ -54,6 +55,30 @@ export function textSvg(t: TextExtra, index: number): string {
   return `    <text id="Label ${pad(index + 1)}" x="${fmt(t.x)}" y="${fmt(t.y)}" font-family="${LABEL_FONT}" font-size="${fmt(t.size)}"${weightAttr(t)} fill="${t.color}">${escapeXml(t.text)}</text>`;
 }
 
+/** Centres of a ring marker's dots, first dot at `phase`, going round clockwise. */
+export function markerDots(m: MarkerExtra): { x: number; y: number }[] {
+  const n = Math.max(1, Math.round(m.dots));
+  return Array.from({ length: n }, (_, i) => {
+    const a = m.phase + (i * 2 * Math.PI) / n;
+    return { x: m.cx + m.r * Math.cos(a), y: m.cy + m.r * Math.sin(a) };
+  });
+}
+
+/** The whole ring as one path: every dot is a circle in the same shape, so it is one vector. */
+export function markerPath(m: MarkerExtra): string {
+  const r = Math.max(0.1, m.dotR);
+  return markerDots(m)
+    .map(
+      ({ x, y }) =>
+        `M${fmt(x - r)} ${fmt(y)}a${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(2 * r)} 0a${fmt(r)} ${fmt(r)} 0 1 0 ${fmt(-2 * r)} 0Z`,
+    )
+    .join('');
+}
+
+export function markerSvg(m: MarkerExtra, index: number): string {
+  return `    <path id="Marker ${pad(index + 1)}" d="${markerPath(m)}" fill="${m.color}"/>`;
+}
+
 /** Boxes go behind the candles. */
 export function boxesLayer(extras: Extra[]): string[] {
   const { boxes } = byKind(extras);
@@ -61,11 +86,12 @@ export function boxesLayer(extras: Extra[]): string[] {
   return ['  <g id="Boxes">', ...boxes.map(boxSvg), '  </g>'];
 }
 
-/** Lines and labels go in front. */
+/** Lines, markers and labels go in front. */
 export function frontLayers(extras: Extra[]): string[] {
-  const { lines, texts } = byKind(extras);
+  const { lines, texts, markers } = byKind(extras);
   const out: string[] = [];
   if (lines.length > 0) out.push('  <g id="Lines">', ...lines.map(lineSvg), '  </g>');
+  if (markers.length > 0) out.push('  <g id="Markers">', ...markers.map(markerSvg), '  </g>');
   if (texts.length > 0) out.push('  <g id="Labels">', ...texts.map(textSvg), '  </g>');
   return out;
 }

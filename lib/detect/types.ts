@@ -132,7 +132,27 @@ export interface TextExtra {
   trace?: string;
 }
 
-export type Extra = LineExtra | BoxExtra | TextExtra;
+/**
+ * A ring of dots (the PSP marker): one shape, never single dots. Source pixels.
+ * Dot i sits at angle phase + i * 2π / dots, at distance r from the centre.
+ */
+export interface MarkerExtra {
+  kind: 'marker';
+  id: string;
+  cx: number;
+  cy: number;
+  /** Distance from the centre to each dot's centre. */
+  r: number;
+  dots: number;
+  /** Radius of one dot. */
+  dotR: number;
+  /** Angle of the first dot, radians. */
+  phase: number;
+  /** "#RRGGBB" */
+  color: string;
+}
+
+export type Extra = LineExtra | BoxExtra | TextExtra | MarkerExtra;
 
 /** How bull and bear were told apart: which colour group means "rising". */
 export interface Direction {
