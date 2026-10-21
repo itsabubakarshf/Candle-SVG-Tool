@@ -5,7 +5,7 @@ import { findBackground } from './background';
 import { sampleInterior } from './classify';
 import { decideUp, groupCandles } from './direction';
 import { checkClean, stripLongLines } from './clean';
-import { findExtras, withoutFootprint, withoutFootprintDe } from './extras';
+import { findExtras, findThinLines, withoutFootprint, withoutFootprintDe } from './extras';
 import { confidenceScore } from './confidence';
 import { colourMaps } from './coverage';
 import { blankStrays, columnRuns, segmentColumns } from './segment';
@@ -63,17 +63,36 @@ export function detect(
     return out;
   };
   // A strong line across the chart joins all the candles into one: take it out first.
-  const stripped = stripLongLines(raw.de, raw.dl, width, height);
+  let stripped = stripLongLines(raw.de, raw.dl, width, height);
   let { de, dl } = stripped;
 
   // Dotted and dashed lines would each be read as a candle: take them out before anything else.
   const lossy = settings.lossySource ?? false;
   const pre = findExtras(image, background, raw.de, [], { lossy, patternedOnly: true });
-  const base =
+  let base =
     pre.extras.length > 0
       ? withoutFootprint(stripped.de, stripped.dl, pre.footprint, width, height)
       : stripped;
   let measured = read(base.de, base.dl);
+
+  // A short level line drawn from a candle's side joins that candle: once the candles' colours
+  // are known, take out thin lines of another colour and read the candles again.
+  const thin = lossy
+    ? { lines: [], footprint: new Uint8Array(0) }
+    : findThinLines(image, raw.de, measured);
+  let extrasDe = raw.de;
+  if (thin.lines.length > 0) {
+    stripped = {
+      ...withoutFootprint(stripped.de, stripped.dl, thin.footprint, width, height),
+      found: stripped.found,
+    };
+    extrasDe = withoutFootprintDe(raw.de, thin.footprint);
+    base =
+      pre.extras.length > 0
+        ? withoutFootprint(stripped.de, stripped.dl, pre.footprint, width, height)
+        : stripped;
+    measured = read(base.de, base.dl);
+  }
   de = base.de;
   dl = base.dl;
 
@@ -144,19 +163,39 @@ export function detect(
         wickBottom: m.wickBottom,
       }));
   };
-  let found = findExtras(image, background, raw.de, extent(measured), { lossy });
+  let found = findExtras(image, background, extrasDe, extent(measured), { lossy });
   // Reading the candles again changes what counts as "not a candle": go round until it settles.
   for (let round = 0; round < 3 && found.extras.length > 0; round++) {
     const cleaned = withoutFootprint(stripped.de, stripped.dl, found.footprint, width, height);
     const again = read(cleaned.de, cleaned.dl);
     if (again.length === 0) break;
     measured = again;
-    const next = findExtras(image, background, raw.de, extent(measured), { lossy });
+    const next = findExtras(image, background, extrasDe, extent(measured), { lossy });
     const same = next.extras.length === found.extras.length && sameFootprint(next, found);
     found = next;
     de = cleaned.de;
     dl = cleaned.dl;
     if (same) break;
+  }
+  if (thin.lines.length > 0 && measured.length > 0) {
+    const used = found.extras.filter((e) => e.kind === 'line').length;
+    const footprint =
+      found.footprint.length > 0
+        ? new Uint8Array(found.footprint)
+        : new Uint8Array(thin.footprint.length);
+    thin.footprint.forEach((v, p) => {
+      if (v) footprint[p] = 1;
+    });
+    found = {
+      extras: [
+        ...found.extras,
+        ...thin.lines.map((l, i) => ({
+          ...l,
+          id: `line-${String(used + i + 1).padStart(2, '0')}`,
+        })),
+      ],
+      footprint,
+    };
   }
   if (found.extras.length > 0) {
     ({ de, dl } = withoutFootprint(stripped.de, stripped.dl, found.footprint, width, height));

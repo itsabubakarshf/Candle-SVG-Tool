@@ -1418,3 +1418,145 @@ export function withoutFootprintDe(de: Float32Array, footprint: Uint8Array): Flo
   for (let p = 0; p < footprint.length; p++) if (footprint[p]) out[p] = 0;
   return out;
 }
+
+/** What findThinLines needs to know about each candle. */
+export interface ThinLineCandle {
+  bodyTop: number;
+  bodyBottom: number;
+  wickTop: number | null;
+  wickBottom: number | null;
+  borderRgb: Rgb;
+  wickRgb: Rgb | null;
+}
+
+/**
+ * Short level lines drawn from a candle's side (TradingView starts them at the candle). Their
+ * columns overlap the candle, so the candle reader would take them as part of it. Found by
+ * colour: 1 or 2 px thick, nothing above or below, a colour no candle has, one colour from end
+ * to end, starting or ending right next to other ink, and open at least at one end.
+ */
+export function findThinLines(
+  image: PixelImage,
+  de: Float32Array,
+  candles: ThinLineCandle[],
+): { lines: LineExtra[]; footprint: Uint8Array } {
+  const { width, height, data } = image;
+  const footprint = new Uint8Array(width * height);
+  const lines: LineExtra[] = [];
+  const real = candles.filter(
+    (c) =>
+      Number.isFinite(c.bodyTop) && Number.isFinite(c.bodyBottom) && c.bodyBottom - c.bodyTop > 2,
+  );
+  if (real.length < 2) return { lines, footprint };
+  // a colour counts as a candle's when two candles have it (a line can stretch one candle to it)
+  const each = real.flatMap((c) =>
+    [c.borderRgb, c.wickRgb].flatMap((rgb) =>
+      rgb ? [rgbToLab(...(rgb.map(Math.round) as Rgb))] : [],
+    ),
+  );
+  const candleLabs = each.filter(
+    (l, i) => each.filter((m, j) => j !== i && deltaE(l, m) <= 10).length >= 1,
+  );
+  if (candleLabs.length === 0) return { lines, footprint };
+  const maxLen = Math.max(48, 0.3 * width);
+  const labAt = (p: number) =>
+    rgbToLab(data[p * 4] as number, data[p * 4 + 1] as number, data[p * 4 + 2] as number);
+  const inked = (x: number, y: number) =>
+    x >= 0 && y >= 0 && x < width && y < height && (de[y * width + x] as number) >= 12;
+  const quietAt = (x: number, y: number) =>
+    y < 0 || y >= height || (de[y * width + x] as number) < WEAK;
+  const MAX_ROWS = 2;
+  /** How many rows of ink go down from (x, y) before it is empty again; 0 if more than MAX_ROWS. */
+  const depth = (x: number, y: number) => {
+    for (let t = 1; t <= MAX_ROWS; t++) if (quietAt(x, y + t)) return t;
+    return 0;
+  };
+  // a pixel of a thin row: ink with nothing right above it, and empty again within a few rows
+  const thin = (x: number, y: number) => inked(x, y) && quietAt(x, y - 1) && depth(x, y) > 0;
+  /** No ink there, and no candle side going up or down from it. */
+  const free = (x0: number, y: number, rows: number) =>
+    [x0 - 1, x0, x0 + 1].every(
+      (xx) => !inked(xx, y) && !inked(xx, y - 3) && !inked(xx, y + rows + 2),
+    );
+  for (let y = 0; y < height; y++) {
+    let x = 0;
+    while (x < width) {
+      // cheap first: a run of thin pixels, whatever their colour
+      if (!thin(x, y)) {
+        x++;
+        continue;
+      }
+      let b = x;
+      while (b + 1 < width && thin(b + 1, y)) b++;
+      const a0 = x;
+      x = b + 1;
+      if (b - a0 + 1 < 12) continue;
+      // then split it where the colour changes (a candle's border, then the line)
+      let s0 = a0;
+      while (s0 <= b) {
+        const first = labAt(y * width + s0);
+        let e = s0;
+        while (e + 1 <= b && deltaE(labAt(y * width + e + 1), first) <= 15) e++;
+        const s = s0;
+        s0 = e + 1;
+        const len = e - s + 1;
+        if (len < 12 || len > maxLen) continue;
+        let sr = 0;
+        let sg = 0;
+        let sb = 0;
+        for (let xx = s; xx <= e; xx++) {
+          const q = y * width + xx;
+          sr += data[q * 4] as number;
+          sg += data[q * 4 + 1] as number;
+          sb += data[q * 4 + 2] as number;
+        }
+        const mean: Rgb = [sr / len, sg / len, sb / len];
+        const meanLab = rgbToLab(...(mean.map(Math.round) as Rgb));
+        if (candleLabs.some((c) => deltaE(meanLab, c) <= 25)) continue;
+        const depths = [];
+        for (let xx = s; xx <= e; xx++) depths.push(depth(xx, y));
+        depths.sort((p, q) => p - q);
+        const rows = depths[depths.length >> 1] as number;
+        let quiet = 0;
+        for (let xx = s; xx <= e; xx++) if (quietAt(xx, y - 1) && quietAt(xx, y + rows)) quiet++;
+        if (quiet < 0.85 * len) continue;
+        // drawn from a candle: one end touches ink, the other is open (a line across the chart
+        // is cut by candles at both ends of every piece)
+        // touching a candle: ink that also goes up or down (not the line's own soft end)
+        const solid = (xx: number) =>
+          inked(xx, y) && (inked(xx, y - 1) || inked(xx, y + rows) || inked(xx, y - 2));
+        const touchL = solid(s - 1) || solid(s - 2);
+        const touchR = solid(e + 1) || solid(e + 2);
+        // (one pixel of slack at the open end: its last pixel is often soft)
+        if (touchL === touchR) continue; // touched at both ends: a hollow candle's border
+        if (!((touchL && free(e + 3, y, rows)) || (touchR && free(s - 3, y, rows)))) continue;
+        // the same colour again past the candle it touches: one long line through the candles
+        const goesOn = (from: number, dir: 1 | -1) => {
+          let xx = from;
+          for (let k = 0; k < 80 && inked(xx, y); k++) xx += dir;
+          for (let k = 0; k < 3; k++, xx += dir) {
+            if (xx < 0 || xx >= width) return false;
+            if (inked(xx, y) && deltaE(labAt(y * width + xx), meanLab) <= 15) return true;
+          }
+          return false;
+        };
+        if ((touchL && goesOn(s - 1, -1)) || (touchR && goesOn(e + 1, 1))) continue;
+        lines.push({
+          kind: 'line',
+          id: '',
+          x1: s,
+          y1: y + rows / 2,
+          x2: e + 1,
+          y2: y + rows / 2,
+          color: rgbToHex(mean.map(Math.round) as Rgb),
+          width: rows,
+          dash: null,
+        });
+        for (let r = 0; r < rows; r++) {
+          for (let xx = s; xx <= e; xx++) footprint[(y + r) * width + xx] = 1;
+        }
+      }
+    }
+  }
+  return { lines, footprint };
+}

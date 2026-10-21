@@ -341,6 +341,7 @@ export function measureCluster(
         mass += q;
         moment += q * (from + dir * k + 0.5);
       });
+      if (mass === 0) return dir === 1 ? from : from + 1; // nothing there: the row itself
       const centre = moment / mass;
       return dir === 1 ? centre - mass / 2 : centre + mass / 2;
     }

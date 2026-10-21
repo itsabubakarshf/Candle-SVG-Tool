@@ -420,3 +420,25 @@ describe('box styles (see-through boxes)', () => {
     expect(matchBoxStyle(hex, bg, [style])).toEqual(style);
   });
 });
+
+describe('a short level line drawn from a candle', () => {
+  it("from a hollow candle's bottom: one blue line, the candle stays whole, clean", () => {
+    const r = detect(load('line-touch.png'));
+    const l = lines(r);
+    expect(l).toHaveLength(1);
+    expect(l[0]).toMatchObject({ x1: 34, x2: 92, y1: 293.5, color: '#669DF9', width: 1 });
+    expect(r.candles).toHaveLength(12);
+    const hollow = r.candles[1];
+    expect(hollow?.type).toBe('bull');
+    expect(hollow?.bodyBottom).toBeCloseTo(294, 0);
+    expect(r.cleanliness.clean).toBe(true);
+  });
+
+  it("from a dark candle's side, beside the PSP sticker", () => {
+    const r = detect(load('psp-b.png'));
+    const blue = lines(r).filter((l) => l.color === '#669DF9');
+    expect(blue).toHaveLength(1);
+    expect(blue[0]?.y1).toBeCloseTo(433.5, 1);
+    expect(r.cleanliness.clean).toBe(true);
+  });
+});
