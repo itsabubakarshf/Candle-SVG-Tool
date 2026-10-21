@@ -52,7 +52,13 @@ export function ExtraShapes({ extras, layer }: { extras: Extra[]; layer: 'below'
         />
       ))}
       {markers.map((m) => (
-        <path key={m.id} data-extra={m.id} d={markerPath(m)} fill={m.color} />
+        <path
+          key={m.id}
+          data-extra={m.id}
+          d={markerPath(m)}
+          fill={m.color}
+          fillOpacity={m.opacity ?? 1}
+        />
       ))}
       {texts.map((t) =>
         t.text.trim() === '' && t.trace ? (

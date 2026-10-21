@@ -80,7 +80,9 @@ export function markerPath(m: MarkerExtra): string {
 }
 
 export function markerSvg(m: MarkerExtra, index: number): string {
-  return `    <path id="Marker ${pad(index + 1)}" d="${markerPath(m)}" fill="${m.color}"/>`;
+  const opacity =
+    m.opacity !== undefined && m.opacity < 1 ? ` fill-opacity="${fmt(m.opacity)}"` : '';
+  return `    <path id="Marker ${pad(index + 1)}" d="${markerPath(m)}" fill="${m.color}"${opacity}/>`;
 }
 
 /** Boxes go behind the candles. */

@@ -328,9 +328,9 @@ describe('what is not found', () => {
 
 describe('PSP sticker (dotted ring)', () => {
   // where the empty place of the sticker is: top right, and turned to the bottom left
-  for (const [file, gap] of [
-    ['psp-a.png', -Math.PI / 4],
-    ['psp-b.png', (3 * Math.PI) / 4],
+  for (const [file, gap, colour] of [
+    ['psp-a.png', -Math.PI / 4, '#B8B8B8'],
+    ['psp-b.png', (3 * Math.PI) / 4, '#2E2E2E'],
   ] as const) {
     it(`${file}: the ring is one sticker and the chart counts as clean`, () => {
       const r = detect(load(file));
@@ -340,6 +340,8 @@ describe('PSP sticker (dotted ring)', () => {
       expect(m.r).toBeGreaterThan(6);
       expect(m.r).toBeLessThan(10);
       expect(Math.abs(m.phase - gap)).toBeLessThan(0.3);
+      // exactly the screenshot's colour, not a blend with the dots' soft edges
+      expect(m.color).toBe(colour);
       expect(r.cleanliness.clean).toBe(true);
     });
   }
@@ -360,5 +362,7 @@ describe('PSP sticker (dotted ring)', () => {
     expect(svg.match(/<path /g)).toHaveLength(1);
     expect(svg).toContain('fill="#123456"');
     expect(markerPath(m).match(/M/g)).toHaveLength(7);
+    expect(svg).not.toContain('fill-opacity');
+    expect(frontLayers([{ ...m, opacity: 0.5 }]).join('\n')).toContain('fill-opacity="0.5"');
   });
 });

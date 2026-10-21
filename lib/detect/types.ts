@@ -149,6 +149,8 @@ export interface MarkerExtra {
   phase: number;
   /** "#RRGGBB" */
   color: string;
+  /** 0..1; missing means fully opaque. */
+  opacity?: number;
   /** Where it is in the screenshot. Never changes; covered so the original does not show. */
   from?: { cx: number; cy: number; r: number };
 }

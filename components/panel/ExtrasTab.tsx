@@ -319,7 +319,7 @@ function MarkerForm({ marker }: { marker: MarkerExtra }) {
         PSP sticker
       </h3>
       <p className="text-xs text-muted-foreground">
-        One shape in the SVG. Colour and size change the whole ring.
+        One shape in the SVG. Colour, opacity and size change the whole ring.
       </p>
       <ColorField
         label="Colour"
@@ -342,6 +342,14 @@ function MarkerForm({ marker }: { marker: MarkerExtra }) {
           step={45}
           onCommit={(v) => update(marker.id, { phase: (v * Math.PI) / 180 })}
         />
+        <Num
+          label="Opacity (%)"
+          value={Math.round((marker.opacity ?? 1) * 100)}
+          min={0}
+          step={5}
+          onCommit={(v) => update(marker.id, { opacity: Math.min(100, Math.max(0, v)) / 100 })}
+        />
+        <span />
         <Num label="Centre x" value={marker.cx} onCommit={(v) => update(marker.id, { cx: v })} />
         <Num label="Centre y" value={marker.cy} onCommit={(v) => update(marker.id, { cy: v })} />
       </div>

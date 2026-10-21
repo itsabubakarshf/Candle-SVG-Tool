@@ -985,15 +985,23 @@ export function findExtras(
     for (const ring of findRings(comps)) {
       const pix = pixelsOf(ring.members);
       const peak = Math.max(...ring.members.map((c) => c.peak));
+      // the sticker's own colour: the one its dots' middles have most often (edges are blended)
       const strong = pix.filter((p) => (ink[p] as number) >= 0.8 * peak);
-      const col: Rgb = [0, 0, 0];
+      const counts = new Map<number, number>();
       for (const p of strong) {
-        const c = rgbAt(image, p);
-        col[0] += c[0];
-        col[1] += c[1];
-        col[2] += c[2];
+        const [r0, g0, b0] = rgbAt(image, p);
+        const key = (r0 << 16) | (g0 << 8) | b0;
+        counts.set(key, (counts.get(key) ?? 0) + 1);
       }
-      const n = Math.max(1, strong.length);
+      let top = 0;
+      let topCount = -1;
+      for (const [key, count] of counts) {
+        if (count > topCount) {
+          top = key;
+          topCount = count;
+        }
+      }
+      const own: Rgb = [(top >> 16) & 255, (top >> 8) & 255, top & 255];
       const cx = Math.round(ring.cx * 4) / 4;
       const cy = Math.round(ring.cy * 4) / 4;
       const r = Math.round(ring.r * 10) / 10;
@@ -1006,7 +1014,7 @@ export function findExtras(
         r,
         dotR,
         phase: ring.phase,
-        color: rgbToHex([col[0] / n, col[1] / n, col[2] / n]),
+        color: rgbToHex(own),
         from: { cx, cy, r: r + dotR },
       });
       for (const m of ring.members) claimed.add(m);
